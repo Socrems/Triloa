@@ -1,0 +1,2 @@
+soundcard==0.4.6
+faster-whisper==1.2.1

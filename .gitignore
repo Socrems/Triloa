@@ -1,0 +1,27 @@
+.venv/
+.cache/
+cache/
+data/
+models/
+downloads/
+logs/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+runtime/
+dist/
+
+# Local settings, private handoff notes and release archives.
+.env
+.env.*
+!.env.example
+DEV_HANDOFF.md
+*.log
+*.zip
+*.7z
+*.pem
+*.key
+public-release/
+.idea/
+.vscode/
