@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Triloa 网页视口翻译",
+  "version": "0.1.0",
+  "description": "按网站启用视口翻译，通过本机翻译服务显示中文。",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*"
+  ],
+  "action": {
+    "default_title": "Triloa 网页视口翻译",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": ["model_cache.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

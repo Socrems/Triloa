@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Triloa 网页视口翻译</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>Triloa 网页视口翻译</h1>
+    <p id="site" class="site">正在读取当前网站…</p>
+    <label class="setting" for="enabled">
+      <span class="setting-text">在此网站启用翻译</span>
+      <input id="enabled" type="checkbox" role="switch" disabled>
+      <span class="switch" aria-hidden="true"></span>
+    </label>
+    <p id="status" class="status" role="status">每个网站默认关闭，可在这里单独开启。</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
