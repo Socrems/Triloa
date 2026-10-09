@@ -169,7 +169,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Triloa · 离线翻译")
+        from . import __version__
+        self.setWindowTitle(f'Triloa v{__version__} · 离线翻译')
         self.setMinimumSize(720, 580)
         self.resize(870, 740)
         self._worker = None

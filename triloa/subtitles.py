@@ -614,7 +614,8 @@ class SubtitleControl(QWidget):
         except RuntimeError as exc:
             self.status.setText(str(exc))
             return
-        self._translation_label = 'Qwen3-4B' if selected_backend() == 'qwen' else 'HY-MT / 备用翻译'
+        from .translator import model_label
+        self._translation_label = model_label()
         self._failed = False
         self._latest_subtitle = None
         self._display_enabled = True

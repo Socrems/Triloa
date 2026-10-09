@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Triloa 网页视口翻译",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "按网站启用视口翻译，通过本机翻译服务显示中文。",
   "permissions": [
     "activeTab",

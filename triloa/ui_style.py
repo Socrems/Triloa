@@ -78,7 +78,7 @@ QPushButton:hover {
 QPushButton:pressed {
     background-color: #2c617e;
 }
-QPushButton:focus, QComboBox:focus, QTextEdit:focus {
+QPushButton:focus, QComboBox:focus, QTextEdit:focus, QLineEdit:focus {
     border: 1px solid #65afe0;
 }
 QPushButton:disabled {
@@ -107,7 +107,7 @@ QPushButton#dangerButton:hover {
     background-color: #60383b;
     border-color: #d9787b;
 }
-QComboBox, QTextEdit {
+QComboBox, QTextEdit, QLineEdit {
     background-color: #202328;
     border: 1px solid #464c55;
     border-radius: 8px;
@@ -117,6 +117,10 @@ QComboBox, QTextEdit {
 QComboBox {
     min-height: 22px;
     padding: 7px 12px;
+}
+QLineEdit {
+    min-height: 22px;
+    padding: 7px 9px;
 }
 QComboBox::drop-down {
     border: none;

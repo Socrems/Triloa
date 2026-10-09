@@ -1,4 +1,4 @@
-"""Offline English/Japanese to Chinese through HY-MT or Argos."""
+"""Shared offline translation through built-in or user-selected local models."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def model_identity() -> str:
     """Opaque cache identity, including model changes and service restarts."""
     with _condition:
         backend = selected_backend()
-        model = qwen_model() if backend == 'qwen' else None
+        model = selected_local_model() if backend == 'custom' else qwen_model() if backend == 'qwen' else None
         identity = f'{_model_instance}\0{_model_revision}\0{backend}\0{model}'
         return sha256(identity.encode('utf-8')).hexdigest()
 
@@ -44,7 +44,8 @@ def model_session():
 
 def selected_backend():
     from . import preferences
-    return os.getenv('TRILOA_TRANSLATOR', preferences.get('translation.backend', 'auto')).lower()
+    value = os.getenv('TRILOA_TRANSLATOR') or preferences.get('translation.backend', 'auto')
+    return value.lower() if isinstance(value, str) else 'auto'
 
 
 def qwen_model():
@@ -52,40 +53,129 @@ def qwen_model():
     from .paths import MODELS
     configured = preferences.get('translation.qwen_path')
     if configured:
+        if not isinstance(configured, str):
+            return None
         path = Path(configured)
-        if path.is_file():
-            return path
+        return path if path.is_file() else None
     return next(iter(sorted((MODELS / 'qwen3').glob('*.gguf'))), None)
 
 
-def set_backend(backend, qwen_path=None):
-    global _model_revision
+def _check_model_change():
+    if _requests or _active or _sessions or _waiting:
+        raise RuntimeError('请先停止字幕并等待当前翻译结束，再修改或切换模型')
+    if os.getenv('TRILOA_TRANSLATOR'):
+        raise RuntimeError('当前由 TRILOA_TRANSLATOR 环境变量指定模型，请取消该变量后切换')
+
+
+def model_busy() -> bool:
+    with _condition:
+        return bool(_requests or _active or _sessions or _waiting)
+
+
+def selected_local_model():
     from . import preferences
-    if backend not in {'auto', 'hy', 'qwen'}:
+    from .translation_models import registered_models
+    identifier = preferences.get('translation.model_id')
+    return next((model for model in registered_models() if model.id == identifier), None)
+
+
+def model_label() -> str:
+    backend = selected_backend()
+    if backend == 'custom':
+        model = selected_local_model()
+        return model.name if model is not None else '自选模型 · 未找到记录'
+    return {'auto': 'HY-MT / Argos 备用', 'hy': 'HY-MT',
+            'qwen': 'Qwen', 'argos': 'Argos'}.get(backend, backend)
+
+
+def _validate_selected_model(backend):
+    if backend == 'qwen' and qwen_model() is None:
+        raise RuntimeError('Qwen 模型文件不存在，请重新选择')
+    if backend == 'custom':
+        model = selected_local_model()
+        if model is None:
+            raise RuntimeError('未找到所选翻译模型，请重新添加或选择')
+        if not model.path.is_file():
+            raise RuntimeError(f'模型“{model.name}”的文件已移动或删除，请在模型设置中重新选择')
+
+
+def _invalidate_model():
+    global _model_revision
+    _cache.clear()
+    _model_revision += 1
+
+
+def set_backend(backend, qwen_path=None, *, model_id=None):
+    from . import preferences
+    from .translation_models import registered_models, validate_gguf
+    if backend not in {'auto', 'hy', 'qwen', 'argos', 'custom'}:
         raise ValueError('不支持的翻译模型')
     with _condition:
-        if _requests or _active or _sessions or _waiting:
-            raise RuntimeError('请先停止字幕并等待当前翻译结束，再切换模型')
-        if os.getenv('TRILOA_TRANSLATOR'):
-            raise RuntimeError('当前由 TRILOA_TRANSLATOR 环境变量指定模型，请取消该变量后切换')
+        _check_model_change()
+        values = {'translation.backend': backend}
         if qwen_path:
-            path = Path(qwen_path)
-            with path.open('rb') as stream:
-                if stream.read(4) != b'GGUF':
-                    raise ValueError('请选择有效的 GGUF 模型文件')
-            preferences.put('translation.qwen_path', str(path.resolve()))
-        if backend == 'qwen' and qwen_model() is None:
+            values['translation.qwen_path'] = str(validate_gguf(qwen_path))
+        if backend == 'qwen' and not qwen_path and qwen_model() is None:
             raise RuntimeError('请先选择已下载的 Qwen3 GGUF 文件')
-        preferences.put('translation.backend', backend)
-        _cache.clear()
-        _model_revision += 1
+        if backend == 'custom':
+            model = next((item for item in registered_models() if item.id == model_id), None)
+            if model is None:
+                raise ValueError('未找到所选模型记录')
+            validate_gguf(model.path)
+            values['translation.model_id'] = model.id
+        preferences.update(values)
+        _invalidate_model()
+
+
+def save_local_model(path, name='', profile='generic', execution='auto', *, model_id=None):
+    """Add or edit one record and select it, without copying any weights."""
+    from . import preferences
+    from .translation_models import LocalModel, PROFILES, EXECUTIONS, registered_models, same_path, validate_gguf
+    if profile not in PROFILES or execution not in EXECUTIONS:
+        raise ValueError('不支持的模型类型或运行方式')
+    with _condition:
+        _check_model_change()
+        path = validate_gguf(path)
+        records = registered_models()
+        existing = next((item for item in records if item.id == model_id), None) if model_id else None
+        if model_id and existing is None:
+            raise ValueError('要修改的模型记录已不存在')
+        duplicate = next((item for item in records if same_path(item.path, path) and item.id != model_id), None)
+        if model_id and duplicate is not None:
+            raise ValueError('此文件已经添加，请直接选择已有模型')
+        existing = existing or duplicate
+        identifier = existing.id if existing is not None else uuid4().hex
+        model = LocalModel(identifier, (name.strip() or path.stem)[:80], path, profile, execution)
+        updated = [model if item.id == identifier else item for item in records]
+        if existing is None:
+            updated.append(model)
+        preferences.update({'translation.models': [item.record() for item in updated],
+                            'translation.backend': 'custom', 'translation.model_id': identifier})
+        _invalidate_model()
+        return model
+
+
+def remove_local_model(identifier):
+    """Remove a saved choice, never the model file itself."""
+    from . import preferences
+    from .translation_models import registered_models
+    with _condition:
+        _check_model_change()
+        records = registered_models()
+        remaining = [item.record() for item in records if item.id != identifier]
+        if len(remaining) == len(records):
+            return
+        values = {'translation.models': remaining}
+        if selected_backend() == 'custom' and preferences.get('translation.model_id') == identifier:
+            values.update({'translation.backend': 'auto', 'translation.model_id': None})
+            _invalidate_model()
+        preferences.update(values)
 
 
 def begin_subtitle_session():
     global _sessions
     with _condition:
-        if selected_backend() == 'qwen' and qwen_model() is None:
-            raise RuntimeError('Qwen3 模型文件不存在，请重新选择')
+        _validate_selected_model(selected_backend())
         _sessions += 1
 
 
@@ -249,12 +339,12 @@ def translate_texts(texts: list[str], source: str = "auto", target: str = "zh", 
         raise ValueError("目前仅支持英文或日文翻译为中文")
     with _condition:
         backend = selected_backend()
-        model = qwen_model() if backend == "qwen" else None
+        model = selected_local_model() if backend == 'custom' else qwen_model() if backend == 'qwen' else None
         _requests += 1
-    if backend not in {"auto", "argos", "hy", "qwen"}:
+    if backend not in {"auto", "argos", "hy", "qwen", "custom"}:
         with _condition:
             _requests -= 1
-        raise ValueError("TRILOA_TRANSLATOR 只能是 auto、argos、hy 或 qwen")
+        raise ValueError("TRILOA_TRANSLATOR 只能是 auto、argos、hy、qwen 或 custom")
     from . import hy_mt
     from .diagnostics import report_error
     chunks = [_chunks(text) if text.strip() else [] for text in texts]
@@ -262,6 +352,7 @@ def translate_texts(texts: list[str], source: str = "auto", target: str = "zh", 
     done = 0
     result = []
     try:
+        _validate_selected_model(backend)
         for pieces in chunks:
             translated = []
             for part in pieces:
@@ -275,7 +366,10 @@ def translate_texts(texts: list[str], source: str = "auto", target: str = "zh", 
                         _cache.move_to_end(key)
                     else:
                         fallback = False
-                        if backend == 'qwen':
+                        if backend == 'custom':
+                            value = hy_mt.translate(part, cancel=cancel, backend='custom', model=model.path,
+                                                    profile=model.profile, execution=model.execution, label=model.name)
+                        elif backend == 'qwen':
                             value = hy_mt.translate(part, cancel=cancel, backend='qwen', model=model)
                         elif backend != 'argos' and (backend == 'hy' or hy_mt.available()):
                             try:
@@ -290,6 +384,7 @@ def translate_texts(texts: list[str], source: str = "auto", target: str = "zh", 
                                 value = _argos([part], source)[0]
                                 fallback = True
                         else:
+                            hy_mt.stop_owned_server()
                             value = _argos([part], source)[0]
                         check_cancel(cancel)
                         if not fallback:
