@@ -5,6 +5,7 @@
 ## 本地检查
 
 按 README 安装所需依赖后，已有回归可以使用：
+源码安装说明见 [源码文档](docs/SOURCE_INSTALL.md)。日常修改只运行受影响的检查；资源安装相关的核心检查是 `python -B -m unittest discover -s tests -p test_resources.py`。已通过的检查无需反复执行，打包在功能完成后集中进行。
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -q

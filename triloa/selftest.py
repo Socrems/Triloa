@@ -1,4 +1,4 @@
-"""Offline checks for a packaged folder build; writes results under its cache."""
+"""Offline checks for a packaged folder build; writes results under D: cache."""
 
 from __future__ import annotations
 
@@ -7,10 +7,76 @@ import os
 import subprocess
 from pathlib import Path
 
-from .paths import CACHE, MODELS, ROOT
+from .paths import CACHE, MODELS, ROOT, portable
+
+
+def _portable_check() -> int:
+    """Check a fresh portable folder without downloading or requiring models."""
+    from . import __version__
+    from .resources import ResourceManager, ocr_model_paths
+    results = {'version': __version__, 'profile': 'Portable'}
+    try:
+        from PySide6.QtWidgets import QApplication
+        from .resource_setup import ResourceSetupDialog
+        from .ui_style import apply_app_style
+        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+        app = QApplication.instance() or QApplication([])
+        apply_app_style(app)
+        dialog = ResourceSetupDialog(first_run=True)
+        dialog.show()
+        app.processEvents()
+        dialog.grab().save(str(CACHE / 'packaging-onboarding.png'))
+        dialog.deleteLater()
+        results['onboarding'] = 'ok'
+        from argostranslate import translate
+        from faster_whisper import WhisperModel
+        from rapidocr import RapidOCR
+        results['dependencies'] = 'ok'
+        manager = ResourceManager()
+        if manager.ready('basic'):
+            from .translator import _argos
+            value = _argos(['Hello world.'], 'en')[0]
+            assert value.strip()
+            from PIL import Image
+            image = CACHE / 'tmp/packaging-ocr-check.png'
+            Image.new('RGB', (320, 100), 'white').save(image)
+            try:
+                from .ocr import recognize
+                recognize(image)
+            finally:
+                image.unlink(missing_ok=True)
+            results['basic'] = 'ok: translation and OCR loaded offline'
+        else:
+            try:
+                ocr_model_paths()
+            except RuntimeError:
+                pass
+            results['basic'] = 'ok: resources deferred to setup'
+        if manager.ready('subtitles'):
+            import numpy as np
+            from .speech import SpeechSubtitleRunner
+            model = SpeechSubtitleRunner()._load_model()
+            segments, _ = model.transcribe(np.zeros(16000, dtype=np.float32), language='en', vad_filter=True)
+            list(segments)
+            results['subtitles'] = 'ok: base and VAD loaded offline'
+        else:
+            results['subtitles'] = 'ok: resources deferred to setup'
+        server = ROOT / 'runtime/llama/llama-server.exe'
+        if server.is_file():
+            process = subprocess.run([str(server), '--version'], cwd=server.parent, capture_output=True,
+                                     timeout=15, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            assert process.returncode == 0, process.stderr.decode('utf-8', 'replace')
+            results['llama_cpu'] = 'ok'
+    except Exception as exc:
+        results['error'] = f'{type(exc).__name__}: {exc}'
+    report = CACHE / 'packaging-selftest.json'
+    report.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')
+    return 1 if 'error' in results else 0
 
 
 def run() -> int:
+    if portable():
+        return _portable_check()
     results: dict[str, str] = {}
 
     profile_file = ROOT / "package-profile.txt"

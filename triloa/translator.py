@@ -258,6 +258,8 @@ def _chunks(text: str, limit: int = 450) -> list[str]:
 
 
 def _argos(texts: list[str], source: str) -> list[str]:
+    from .resources import require_translation_resources
+    require_translation_resources("ja" if source == "ja" or source == "auto" and any(detect_source(text) == "ja" for text in texts) else "en")
     try:
         from argostranslate import translate
     except ImportError as exc:

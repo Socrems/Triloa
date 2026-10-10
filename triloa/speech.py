@@ -316,7 +316,7 @@ class SpeechSubtitleRunner:
             raise RuntimeError(
                 "找不到本地 faster-whisper 模型目录："
                 f"{self.model_path}\n"
-                "请将 CTranslate2 格式模型放入该模型目录；运行时不会联网下载。"
+                "请打开「资源管理」安装实时字幕，或手动放入完整的 CTranslate2 模型。"
             )
         try:
             from faster_whisper import WhisperModel
@@ -326,6 +326,8 @@ class SpeechSubtitleRunner:
             ) from exc
 
         try:
+            from .resources import configure_whisper_vad
+            configure_whisper_vad()
             return WhisperModel(
                 str(self.model_path),
                 device="cpu",

@@ -142,6 +142,7 @@ def recognize(image: Path) -> str:
         raise RuntimeError("尚未安装 OCR 引擎。请先运行安装脚本。") from exc
     with _lock:
         if _engine is None:
-            _engine = RapidOCR()
+            from .resources import ocr_model_paths
+            _engine = RapidOCR(params=ocr_model_paths())
         output = _engine(str(image))
     return _reading_order(output)

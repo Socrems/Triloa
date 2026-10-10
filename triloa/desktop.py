@@ -221,6 +221,9 @@ class MainWindow(QMainWindow):
         settings_button = QPushButton("设置")
         settings_button.clicked.connect(self.open_settings)
         header.addWidget(settings_button)
+        resources_button = QPushButton("资源管理")
+        resources_button.clicked.connect(lambda: self.open_resources())
+        header.addWidget(resources_button)
         layout.addLayout(header)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs, 1)
@@ -370,6 +373,17 @@ class MainWindow(QMainWindow):
         for key in ('main', 'subtitles', 'history', 'monitor'):
             preferences.put('window.' + key, None)
         self.status.setText("窗口位置已恢复")
+
+    def open_resources(self, *, first_run=False):
+        from .translator import model_busy
+        if model_busy():
+            self.status.setText("请先停止字幕并等待当前翻译结束，再安装资源。")
+            return
+        from .resource_setup import ResourceSetupDialog
+        dialog = ResourceSetupDialog(self, first_run=first_run)
+        dialog.exec()
+        if self._subtitle_control:
+            self._subtitle_control.refresh_models()
 
     def open_settings(self):
         dialog = QDialog(self)
@@ -782,6 +796,9 @@ def run_desktop() -> int:
     trace("showing MainWindow")
     window.show()
     trace("shown MainWindow")
+    from .resources import needs_first_run
+    if needs_first_run():
+        QTimer.singleShot(0, lambda: window.open_resources(first_run=True))
     result = app.exec()
     if "server" in locals():
         server.shutdown()

@@ -1,10 +1,20 @@
 # 第三方软件与模型
 
+## v0.1.2 Windows 便携包
+
+便携包包含 Python、实际打包的 Python 依赖、Qt/PySide6 DLL 和 CPU llama.cpp b10964 运行库，不包含模型权重，也不包含 CUDA 或 NeMo 原生运行库。
+
+`licenses/DEPENDENCIES.json` 由 PyInstaller 的实际源文件记录与已安装软件包元数据生成，列出组件版本、声明的许可、上游项目地址和随附许可文件。`licenses/` 保留可获取的 LICENSE、NOTICE、METADATA，以及 Python、Qt 开源许可与 llama.cpp 的许可文本。OpenMP 告知位于 `runtime/llama/LICENSE-LLVM-OpenMP`。
+
+Qt/PySide6 使用独立 DLL 动态链接，可以替换兼容构建；Triloa 不限制为调试 LGPL 库修改而进行的逆向工程。没有修改这些第三方库。对应 Qt/PySide6 6.9.2 的源代码和构建说明见 `licenses/README.txt`，源码位置为 [Qt 6.9.2](https://download.qt.io/archive/qt/6.9/6.9.2/single/)、[PySide6 6.9.2](https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.9.2-src/)。
+
+首次安装显式下载固定版本的 Argos en→zh 1.9、ja→en 1.1、MiniSBD 英语/日语断句、RapidOCR 3.9.2 对应 OCR 模型、SYSTRAN 转换的 Whisper base 和 faster-whisper 1.2.1 的 Silero VAD；下载后校验 SHA256。资源来源与许可分别参见下表，模型安装后不上传用户文字、截图或声音。MiniSBD 的 [软件与资源](https://github.com/LibreTranslate/MiniSBD) 按其上游声明使用；Silero VAD 来源见 [Silero 官方仓库](https://github.com/snakers4/silero-vad)，采用 MIT。
+
 v0.1.1 可添加用户自行下载的 GGUF 文本模型。Triloa 只记录其本地路径，源码包不包含这些权重。自选模型的许可、用途和分发条件应以其原始发布者的说明为准，项目 MIT 许可证只适用于 Triloa 自有代码。
 
 Triloa 自有源码采用根目录的 [MIT 许可证](LICENSE)。本文件列出主要依赖及官方许可来源，不将第三方组件重新授权为 MIT。
 
-源码包包含项目代码、文档和图标，不包含已安装的 Python 软件包、模型权重或原生运行库。安装时获取的第三方文件应保留其原有版权与许可。
+源码包包含项目代码、文档、图标和便携构建时需保留的许可文本，不包含已安装的 Python 软件包、模型权重或原生运行库。安装时获取的第三方文件保留其原有版权与许可。
 
 ## 直接 Python 依赖
 

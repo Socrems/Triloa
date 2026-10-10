@@ -11,8 +11,18 @@ ROOT = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parent.parent
 )
+
+
+def portable() -> bool:
+    try:
+        return (ROOT / "package-profile.txt").read_text(encoding="utf-8-sig").strip() == "Portable"
+    except OSError:
+        return False
+
+
 _data_default = (
-    ROOT.parent.parent / "data" if getattr(sys, "frozen", False) and ROOT.parent.name.lower() == "dist"
+    ROOT / "data" if portable()
+    else ROOT.parent.parent / "data" if getattr(sys, "frozen", False) and ROOT.parent.name.lower() == "dist"
     else ROOT.parent / (ROOT.name + "Data") if getattr(sys, "frozen", False)
     else ROOT / "data"
 )

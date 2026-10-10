@@ -1,9 +1,13 @@
-param([ValidateSet("Full", "Common")][string]$Profile = "Full")
+param(
+    [ValidateSet("Full", "Common", "Portable")][string]$Profile = "Full",
+    [string]$Python = "",
+    [string]$SourceRoot = ""
+)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = [System.IO.Path]::GetFullPath($projectRoot).TrimEnd('\')
 Set-Location -LiteralPath $projectRoot
-$pythonExe = Join-Path $projectRoot '.venv\Scripts\python.exe'
+$pythonExe = if ($Python) { $Python } else { Join-Path $projectRoot '.venv\Scripts\python.exe' }
 if (-not (Test-Path -LiteralPath $pythonExe)) { throw 'Run setup.ps1 first.' }
 
 $cacheRoot = Join-Path $projectRoot 'cache'
@@ -33,6 +37,13 @@ foreach ($target in @($distRoot, $bundleDir, $workDir, $specDir)) {
 if ($LASTEXITCODE -ne 0) {
     & $pythonExe -m pip install --disable-pip-version-check --no-input 'pyinstaller>=6,<7'
     if ($LASTEXITCODE -ne 0) { throw 'PyInstaller installation failed.' }
+}
+
+if ($Profile -eq 'Portable') {
+    if (-not $SourceRoot) { $SourceRoot = $projectRoot }
+    & $pythonExe -B (Join-Path $projectRoot 'tools\build_portable.py') --source $SourceRoot --output (Join-Path $projectRoot 'dist') --cache (Join-Path $cacheRoot 'pyinstaller\portable') --llama-runtime (Join-Path $projectRoot 'runtime\llama')
+    if ($LASTEXITCODE -ne 0) { throw 'Portable build failed.' }
+    return
 }
 
 $args = @(

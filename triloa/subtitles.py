@@ -363,7 +363,7 @@ class SubtitleControl(QWidget):
             "nemotron": NEMOTRON_MODEL_PATH,
         }
         self.model_available = {
-            name: nemotron_available() if name == "nemotron" else path.is_dir() and (path / "model.bin").is_file()
+            name: nemotron_available() if name == "nemotron" else self._whisper_ready(name)
             for name, path in self.model_paths.items()
         }
         self.model_selector = QComboBox()
@@ -395,6 +395,9 @@ class SubtitleControl(QWidget):
             )
         self.model_selector.setCurrentIndex(list(self.model_paths).index(preferred))
         card_layout.addWidget(self.model_selector)
+        resources_button = QPushButton("安装字幕资源")
+        resources_button.clicked.connect(self.open_resources)
+        card_layout.addWidget(resources_button)
 
         self.model_detail = QLabel()
         self.model_detail.setObjectName("cardHint")
@@ -498,6 +501,43 @@ class SubtitleControl(QWidget):
             title.hide()
             layout.setContentsMargins(0, 12, 0, 0)
 
+    @staticmethod
+    def _whisper_ready(name):
+        from .resources import whisper_ready
+        return whisper_ready(name)
+
+    def refresh_models(self):
+        self.model_selector.blockSignals(True)
+        try:
+            for index, (name, path) in enumerate(self.model_paths.items()):
+                ready = nemotron_available() if name == "nemotron" else self._whisper_ready(name)
+                self.model_available[name] = ready
+                label = self.model_selector.itemText(index).replace("（未安装）", "")
+                self.model_selector.setItemText(index, label if ready else label + "（未安装）")
+                item = self.model_selector.model().item(index)
+                if item is not None:
+                    item.setEnabled(ready)
+            if not self.model_available.get(self.model_selector.currentData()):
+                for index, name in enumerate(self.model_paths):
+                    if self.model_available[name]:
+                        self.model_selector.setCurrentIndex(index)
+                        break
+        finally:
+            self.model_selector.blockSignals(False)
+        preferences.put('speech.model', self.model_selector.currentData())
+        self._update_model_detail()
+
+    def open_resources(self):
+        from .translator import model_busy
+        if model_busy():
+            self.status.setText("请先停止字幕并等待当前翻译结束，再安装资源。")
+            return
+        from .resource_setup import ResourceSetupDialog
+        dialog = ResourceSetupDialog(self)
+        dialog.subtitles.setChecked(True)
+        dialog.exec()
+        self.refresh_models()
+
     def refresh_devices(self):
         self.refresh_button.setEnabled(False)
         bridge = self.bridge
@@ -599,7 +639,7 @@ class SubtitleControl(QWidget):
         name = self.model_selector.currentData()
         model_path = self.model_paths[name]
         installed = nemotron_available() if name == "nemotron" else (
-            model_path.is_dir() and (model_path / "model.bin").is_file()
+            self._whisper_ready(name)
         )
         if not installed:
             self.model_available[name] = False
