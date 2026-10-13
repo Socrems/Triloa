@@ -31,15 +31,17 @@ def copy_links(source: Path, destination: Path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('bundle', type=Path)
+    parser.add_argument('--state', choices=('empty', 'installed', 'both'), default='both')
     options = parser.parse_args()
     project = Path(__file__).resolve().parents[1]
     import sys
     sys.path.insert(0, str(project))
     from triloa.resources import ResourceManager, RESOURCES
+    from triloa import __version__
     from triloa.paths import configure_paths
     configure_paths()
     temporary_root = project / 'cache/tmp'
-    report_dir = project / 'cache/v012-package-check'
+    report_dir = project / f'cache/v{__version__}-package-check'
     report_dir.mkdir(exist_ok=True)
     before = sha256((project/'data/preferences.json').read_bytes()).hexdigest()
     results = {}
@@ -49,7 +51,8 @@ def main():
     environment['QT_QPA_PLATFORM'] = 'offscreen'
     if os.name == 'nt':
         environment['QT_QPA_FONTDIR'] = str(Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts')
-    for state in ('empty', 'installed'):
+    states = ('empty', 'installed') if options.state == 'both' else (options.state,)
+    for state in states:
         with TemporaryDirectory(prefix='portable-' + state + '-', dir=temporary_root) as temporary:
             root = Path(temporary)
             copy_links(options.bundle.resolve(), root)

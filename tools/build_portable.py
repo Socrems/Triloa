@@ -90,6 +90,14 @@ def copy_licenses(bundle: Path, source: Path, work: Path):
         additional = extra / (item['name'].lower() + '-LICENSE.txt')
         if additional.exists():
             item['license_files'].append('licenses/' + additional.name)
+    vendor = source / 'triloa/_vendor/qwen3_asr'
+    destination = license_root / 'Qwen3-ASR'
+    destination.mkdir(exist_ok=True)
+    for name in ('LICENSE', 'NOTICE.md'):
+        shutil.copy2(vendor / name, destination / name)
+    inventory.append({'kind':'vendored', 'name':'Qwen3-ASR Transformers backend', 'version':'0.0.6',
+                      'license':'Apache-2.0', 'project_urls':['https://github.com/QwenLM/Qwen3-ASR'],
+                      'license_files':['licenses/Qwen3-ASR/LICENSE', 'licenses/Qwen3-ASR/NOTICE.md']})
     (license_root / 'DEPENDENCIES.json').write_text(json.dumps(inventory, ensure_ascii=False, indent=2), encoding='utf-8')
     return inventory
 
@@ -120,6 +128,7 @@ def main():
                            'PIP_CACHE_DIR':'pip'}.items():
         environment[name] = str(cache / relative)
     environment['ARGOS_DEVICE_TYPE'] = 'cpu'
+    environment['TRILOA_CPU_RUNTIME'] = '1'
     environment['ARGOS_CHUNK_TYPE'] = 'MINISBD'
     bundle = within(output / 'Triloa-Portable', output)
     if bundle.exists():
@@ -129,8 +138,14 @@ def main():
                  '--name', 'Triloa-Portable', '--icon', str(source / 'assets/triloa.ico'),
                  '--distpath', str(output), '--workpath', str(work), '--specpath', str(cache / 'spec'),
                  '--paths', str(source)]
+    arguments.extend(('--additional-hooks-dir', str(source / 'tools/pyinstaller-hooks')))
     for module in ('triloa.desktop', 'triloa.subtitles', 'triloa.speech', 'triloa.nemotron',
-                   'triloa.resource_setup', 'triloa.resources', 'triloa.selftest',
+                   'triloa.resource_setup', 'triloa.resources', 'triloa.selftest', 'triloa.qwen_asr',
+                   'transformers.models.qwen2.tokenization_qwen2_fast',
+                   'transformers.models.qwen2.tokenization_qwen2',
+                   'transformers.models.whisper.feature_extraction_whisper',
+                   'transformers.models.auto.configuration_auto',
+                   'transformers.models.auto.tokenization_auto', 'accelerate',
                    'argostranslate.translate', 'soundcard'):
         arguments.extend(('--hidden-import', module))
     for module in ('rapidocr', 'faster_whisper', 'ctranslate2', 'onnxruntime'):

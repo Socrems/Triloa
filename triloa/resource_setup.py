@@ -38,6 +38,7 @@ class InstallWorker(QThread):
 
 
 class ResourceSetupDialog(QDialog):
+    resources_installed = Signal()
     def __init__(self, parent=None, *, first_run=False):
         super().__init__(parent)
         self.first_run = first_run
@@ -46,7 +47,7 @@ class ResourceSetupDialog(QDialog):
         self._outcome = "idle"
         self.setWindowTitle("欢迎使用 Triloa" if first_run else "Triloa · 资源管理")
         self.setMinimumWidth(620)
-        self.resize(660, 580)
+        self.resize(690, 680)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
@@ -70,10 +71,20 @@ class ResourceSetupDialog(QDialog):
         subtitle_hint.setWordWrap(True)
         subtitle_hint.setObjectName("cardHint")
         layout.addWidget(subtitle_hint)
+        from .qwen_asr import runtime_available
+        self.qwen_asr = QCheckBox("Qwen3-ASR-0.6B · 可选的日语 / 英语语音识别模型")
+        self.qwen_asr.setEnabled(runtime_available())
+        layout.addWidget(self.qwen_asr)
+        qwen_hint = QLabel("模型约 1.88 GB，含配置和分词文件；同时准备基础翻译。可在字幕页选择已有本地目录。CPU 可运行，但速度取决于硬件。")
+        if not runtime_available():
+            qwen_hint.setText("源码版先运行 setup_qwen_asr.ps1 安装推理依赖，再在这里下载模型；v0.1.3 便携包已包含依赖。")
+        qwen_hint.setWordWrap(True)
+        qwen_hint.setObjectName("cardHint")
+        layout.addWidget(qwen_hint)
         self.summary = QLabel()
         self.summary.setWordWrap(True)
         layout.addWidget(self.summary)
-        location = QLabel(f"模型、下载和缓存保存在程序文件夹内：\n{ROOT}\n请解压到可写目录后运行，并为安装和解压预留约 2 GB 空间。")
+        location = QLabel(f"模型、下载和缓存保存在程序文件夹内：\n{ROOT}\n请解压到可写目录。基础资源另预留约 2 GB；选择 Qwen3-ASR 再增加约 2 GB。")
         if not portable():
             from .paths import MODELS, DATA
             location.setText(f"模型目录：{MODELS}\n设置与断句资源：{DATA}")
@@ -81,7 +92,7 @@ class ResourceSetupDialog(QDialog):
         location.setWordWrap(True)
         location.setObjectName("cardHint")
         layout.addWidget(location)
-        sources = QLabel("下载来源：Argos、RapidOCR、SYSTRAN/faster-whisper、MiniSBD 的官方发布。资源适用各自许可，详见包内 THIRD_PARTY_NOTICES.md。")
+        sources = QLabel("下载来源：Argos、RapidOCR、SYSTRAN/faster-whisper、MiniSBD 和 Qwen 的官方发布。资源适用各自许可，详见包内 THIRD_PARTY_NOTICES.md。")
         sources.setWordWrap(True)
         sources.setObjectName("cardHint")
         layout.addWidget(sources)
@@ -113,15 +124,17 @@ class ResourceSetupDialog(QDialog):
         layout.addLayout(actions)
         self.basic.toggled.connect(self.refresh_plan)
         self.subtitles.toggled.connect(self._subtitle_changed)
+        self.qwen_asr.toggled.connect(self._subtitle_changed)
         self.refresh_plan()
 
     def features(self):
-        return tuple(key for key, box in (("basic", self.basic), ("subtitles", self.subtitles)) if box.isChecked())
+        return tuple(key for key, box in (("basic", self.basic), ("subtitles", self.subtitles), ("qwen-asr", self.qwen_asr)) if box.isChecked())
 
     def _subtitle_changed(self, checked):
-        if checked:
+        required = self.subtitles.isChecked() or self.qwen_asr.isChecked()
+        if required:
             self.basic.setChecked(True)
-        self.basic.setEnabled(not checked)
+        self.basic.setEnabled(not required)
         self.refresh_plan()
 
     def refresh_plan(self):
@@ -138,6 +151,8 @@ class ResourceSetupDialog(QDialog):
         if self.worker:
             return
         if not self.refresh_plan():
+            self._activate_downloaded_model()
+            self.resources_installed.emit()
             self.accept()
             return
         self._outcome = "running"
@@ -148,6 +163,7 @@ class ResourceSetupDialog(QDialog):
         self.later_button.setEnabled(False)
         self.basic.setEnabled(False)
         self.subtitles.setEnabled(False)
+        self.qwen_asr.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.worker = InstallWorker(self.features(), self)
         self.worker.progress.connect(self._progress)
@@ -187,15 +203,27 @@ class ResourceSetupDialog(QDialog):
         self.cancel_button.setEnabled(False)
         self.later_button.setEnabled(True)
         self.subtitles.setEnabled(True)
-        self.basic.setEnabled(not self.subtitles.isChecked())
+        from .qwen_asr import runtime_available
+        self.qwen_asr.setEnabled(runtime_available())
+        self.basic.setEnabled(not (self.subtitles.isChecked() or self.qwen_asr.isChecked()))
         self.refresh_plan()
         if self._outcome in {"failed", "cancelled"}:
             self.start_button.setText("重试安装")
         if self._outcome == "success":
+            self._activate_downloaded_model()
+            self.resources_installed.emit()
             preferences.put("setup.seen", True)
             self.progress_bar.setValue(100)
         if self._close_after_cancel:
             self.reject()
+
+    def _activate_downloaded_model(self):
+        if self.qwen_asr.isChecked():
+            from .qwen_asr import QWEN_ASR_MODEL_PATH, select_model_folder
+            try:
+                select_model_folder(QWEN_ASR_MODEL_PATH)
+            except (ValueError, OSError) as exc:
+                self.status.setText(f"资源已安装，但模型目录未能保存：{exc}")
 
     def cancel_install(self):
         if self.worker:

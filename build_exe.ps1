@@ -57,6 +57,14 @@ $args = @(
     '--hidden-import', 'triloa.subtitles',
     '--hidden-import', 'triloa.speech',
     '--hidden-import', 'triloa.nemotron',
+    '--hidden-import', 'triloa.qwen_asr',
+    '--hidden-import', 'transformers.models.qwen2.tokenization_qwen2_fast',
+    '--hidden-import', 'transformers.models.qwen2.tokenization_qwen2',
+    '--hidden-import', 'transformers.models.whisper.feature_extraction_whisper',
+    '--hidden-import', 'transformers.models.auto.configuration_auto',
+    '--hidden-import', 'transformers.models.auto.tokenization_auto',
+    '--hidden-import', 'accelerate',
+    '--additional-hooks-dir', (Join-Path $projectRoot 'tools\pyinstaller-hooks'),
     '--hidden-import', 'triloa.local_websocket',
     '--hidden-import', 'triloa.ocr',
     '--hidden-import', 'triloa.selftest',
@@ -106,9 +114,6 @@ if (Test-Path -LiteralPath $nemoRuntime) {
 Copy-Item -LiteralPath (Join-Path $projectRoot 'extension') -Destination $bundleDir -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $projectRoot 'assets') -Destination $bundleDir -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md') -Destination $bundleDir -Force
-foreach ($noticeFile in @('LICENSE', 'THIRD_PARTY_NOTICES.md', 'CHANGELOG.md')) {
-    Copy-Item -LiteralPath (Join-Path $projectRoot $noticeFile) -Destination $bundleDir -Force
-}
 foreach ($dir in @('cache\tmp', 'downloads')) {
     New-Item -ItemType Directory -Force -Path (Join-Path $bundleDir $dir) | Out-Null
 }
@@ -116,5 +121,5 @@ $exe = Join-Path $bundleDir ($bundleName + '.exe')
 if (-not (Test-Path -LiteralPath $exe)) { throw 'Triloa.exe was not produced.' }
 Set-Content -LiteralPath (Join-Path $bundleDir 'package-profile.txt') -Value $Profile -Encoding UTF8
 Write-Host "Folder build complete ($Profile): $bundleDir"
-Write-Host 'Resources are hard-linked when supported on the same volume to avoid duplicate storage.'
+Write-Host 'Models and llama.cpp files are hard-linked on the same D: volume to avoid duplicate storage.'
 Write-Host 'Copy the whole folder if moving it elsewhere.'

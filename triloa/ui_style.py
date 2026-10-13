@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtGui import QFont, QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QAbstractButton, QProxyStyle, QStyle
 
 from .paths import ROOT
 
@@ -64,6 +64,7 @@ QLabel#statusText {
     color: #d6e9f3;
 }
 QPushButton {
+    outline: none;
     background-color: #343940;
     border: 1px solid #4a5058;
     border-radius: 8px;
@@ -117,6 +118,10 @@ QComboBox, QTextEdit, QLineEdit {
 QComboBox {
     min-height: 22px;
     padding: 7px 12px;
+}
+QPushButton#headerButton, QComboBox#headerModel {
+    min-height: 24px;
+    padding: 6px 12px;
 }
 QLineEdit {
     min-height: 22px;
@@ -174,7 +179,24 @@ QAbstractScrollArea::corner { background: #272c33; }
 """
 
 
+class AppStyle(QProxyStyle):
+    """Keep keyboard focus and the solid QSS border without Windows' dotted inset."""
+    def styleHint(self, hint, option=None, widget=None, returnData=None):
+        if hint == QStyle.SH_ComboBox_AllowWheelScrolling:
+            # Popup lists keep their own scrolling; only clicking commits a choice.
+            return 0
+        return super().styleHint(hint, option, widget, returnData)
+
+    def drawPrimitive(self, element, option, painter, widget=None):
+        if element == QStyle.PE_FrameFocusRect and isinstance(widget, QAbstractButton):
+            return
+        super().drawPrimitive(element, option, painter, widget)
+
+
 def apply_app_style(app: QApplication) -> None:
+    if not getattr(app, '_triloa_focus_style', None):
+        app._triloa_focus_style = AppStyle()
+        app.setStyle(app._triloa_focus_style)
     app.setWindowIcon(QIcon(str(ROOT / "assets" / "triloa.png")))
     app.setFont(QFont("Segoe UI", 10))
     app.setStyleSheet(APP_QSS)

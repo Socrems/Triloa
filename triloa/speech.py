@@ -447,21 +447,8 @@ class SpeechSubtitleRunner:
                 return
             try:
                 audio_feedback.phase(self, "正在识别语音…")
-                segments, info = model.transcribe(
-                    utterance.audio,
-                    language=None if self.language == "auto" else self.language,
-                    task="transcribe",
-                    beam_size=1,
-                    # EndpointVAD already found speech; a second VAD can drop short drafts.
-                    vad_filter=utterance.final,
-                    vad_parameters={
-                        "min_silence_duration_ms": 300,
-                        "speech_pad_ms": 150,
-                    },
-                    condition_on_previous_text=False,
-                )
-                original = "".join(segment.text for segment in segments).strip()
-                language = self.language if self.language != "auto" else str(info.language)
+                original, detected_language = self._transcribe(model, utterance)
+                language = self.language if self.language != "auto" else detected_language
                 if self.stop_event.is_set():
                     return
                 if not original or self._partial_is_stale(utterance):
@@ -521,6 +508,18 @@ class SpeechSubtitleRunner:
             flush=True,
         )
 
+    def _transcribe(self, model: object, utterance: _Utterance) -> tuple[str, str]:
+        segments, info = model.transcribe(
+            utterance.audio,
+            language=None if self.language == "auto" else self.language,
+            task="transcribe", beam_size=1,
+            # EndpointVAD already found speech; a second VAD can drop short drafts.
+            vad_filter=utterance.final,
+            vad_parameters={"min_silence_duration_ms": 300, "speech_pad_ms": 150},
+            condition_on_previous_text=False,
+        )
+        return "".join(segment.text for segment in segments).strip(), str(info.language)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -539,7 +538,7 @@ def main() -> int:
         "--model",
         type=Path,
         default=MODELS / "faster-whisper" / "base",
-        help="本地 CTranslate2 模型目录（默认项目下 models/faster-whisper/base）",
+        help="本地 CTranslate2 模型目录（默认 D 盘 models/faster-whisper/base）",
     )
     parser.add_argument(
         "--mode",

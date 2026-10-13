@@ -10,8 +10,8 @@ let passed = 0;
 
 function panel(sendMessage = async () => ({ ok: true, modelId: "hy" })) {
   const scope = {
-    active: true, checkingModel: false, lastError: "", modelError: "",
-    RETRY_DELAY_MS: 8000, Error, Date,
+    active: true, checkingModel: false, requesting: false, lastError: "", modelError: "",
+    RETRY_DELAY_MS: 8000, CACHE_LIMIT: 500, Error, Date,
     renders: 0, refreshes: 0,
     chrome: { runtime: { sendMessage } }
   };
@@ -24,10 +24,8 @@ function panel(sendMessage = async () => ({ ok: true, modelId: "hy" })) {
   scope.inFlight = scope.modelCache.inFlight;
   scope.retryAt = scope.modelCache.retryAt;
   const source = read("content.js");
-  // Isolate the actual handlers from the DOM-only panel layout.
-  vm.runInContext(source.slice(source.indexOf("    function remember("),
-                               source.indexOf("    function updateStatus(")) +
-                  source.slice(source.indexOf("    async function requestTranslations("),
+  // Isolate the actual handlers; DOM insertion is covered by test_extension_inline.
+  vm.runInContext(source.slice(source.indexOf("    async function requestTranslations("),
                                source.indexOf("    function refresh()")), scope);
   return scope;
 }

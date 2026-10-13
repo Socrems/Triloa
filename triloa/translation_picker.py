@@ -5,7 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QPushButton, QFileDialog,
-    QMessageBox, QLabel, QDialog, QFormLayout, QLineEdit, QDialogButtonBox,
+    QMessageBox, QLabel, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QMenu,
 )
 
 from . import translator
@@ -83,23 +83,24 @@ class TranslationModelPicker(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
         row = QHBoxLayout()
+        row.setSpacing(8)
         row.addWidget(QLabel('翻译模型'))
         self.choice = QComboBox()
+        self.choice.setObjectName('headerModel')
         self.choice.setMinimumWidth(160)
         self.choice.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.choice.setMinimumContentsLength(15)
         self.choice.currentIndexChanged.connect(self.choose)
         row.addWidget(self.choice, 1)
-        self.browse = QPushButton('添加 GGUF')
-        self.browse.clicked.connect(self.browse_model)
-        row.addWidget(self.browse)
-        self.edit = QPushButton('模型设置')
-        self.edit.clicked.connect(self.edit_model)
-        row.addWidget(self.edit)
-        self.remove = QPushButton('移除')
+        self.manage = QPushButton('管理模型')
+        self.manage.setObjectName('headerButton')
+        menu = QMenu(self.manage)
+        self.browse = menu.addAction('添加 GGUF 模型…', self.browse_model)
+        self.edit = menu.addAction('编辑当前模型…', self.edit_model)
+        self.remove = menu.addAction('移除当前记录', self.remove_model)
         self.remove.setToolTip('从选择列表移除这条记录，模型文件保留在原位置')
-        self.remove.clicked.connect(self.remove_model)
-        row.addWidget(self.remove)
+        self.manage.setMenu(menu)
+        row.addWidget(self.manage)
         layout.addLayout(row)
         self.detail = QLabel()
         self.detail.setObjectName('cardHint')
@@ -139,6 +140,7 @@ class TranslationModelPicker(QWidget):
         locked = translator.model_busy()
         controlled = bool(os.getenv('TRILOA_TRANSLATOR'))
         self.choice.setEnabled(not locked and not controlled)
+        self.manage.setEnabled(not locked and not controlled)
         self.browse.setEnabled(not locked and not controlled)
         self.edit.setEnabled(not locked and not controlled and selected is not None)
         self.remove.setEnabled(not locked and not controlled and selected is not None)

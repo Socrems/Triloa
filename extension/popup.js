@@ -23,7 +23,7 @@ async function initialize() {
     enabledSwitch.checked = settings[key] === true;
     enabledSwitch.disabled = false;
     setStatus(enabledSwitch.checked
-      ? "已在此网站开启。可拖动翻译窗标题栏，拖动右下角调整大小。"
+      ? "已在此网站开启。正文、标题和列表项的中文译文会出现在原文下方。"
       : "此网站已关闭；其他网站的设置互不影响。");
 
     enabledSwitch.addEventListener("change", async () => {
@@ -31,7 +31,7 @@ async function initialize() {
       try {
         await chrome.storage.local.set({ [key]: enabledSwitch.checked });
         setStatus(enabledSwitch.checked
-          ? "已开启。若翻译窗未出现，请刷新网页并检查 Edge 的网站访问权限。"
+          ? "已开启。滚动页面会继续翻译；若未出现译文，请保持 Triloa 运行、刷新网页并检查网站访问权限。"
           : "此网站已关闭；其他网站的设置互不影响。");
       } catch (error) {
         enabledSwitch.checked = !enabledSwitch.checked;

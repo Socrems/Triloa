@@ -208,22 +208,25 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
         header = QHBoxLayout()
+        header.setSpacing(8)
         brand = QLabel("Triloa")
         brand.setObjectName("brand")
-        header.addWidget(brand)
+        header.addWidget(brand, 0, Qt.AlignTop)
         header.addStretch()
         badge = QLabel("离线 · 本机处理")
         badge.setObjectName("muted")
         badge.hide()
         from .translation_picker import TranslationModelPicker
         self.translation_picker = TranslationModelPicker()
-        header.addWidget(self.translation_picker)
+        header.addWidget(self.translation_picker, 1, Qt.AlignTop)
         settings_button = QPushButton("设置")
+        settings_button.setObjectName("headerButton")
         settings_button.clicked.connect(self.open_settings)
-        header.addWidget(settings_button)
+        header.addWidget(settings_button, 0, Qt.AlignTop)
         resources_button = QPushButton("资源管理")
+        resources_button.setObjectName("headerButton")
         resources_button.clicked.connect(lambda: self.open_resources())
-        header.addWidget(resources_button)
+        header.addWidget(resources_button, 0, Qt.AlignTop)
         layout.addLayout(header)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs, 1)
@@ -381,6 +384,8 @@ class MainWindow(QMainWindow):
             return
         from .resource_setup import ResourceSetupDialog
         dialog = ResourceSetupDialog(self, first_run=first_run)
+        if self._subtitle_control:
+            dialog.resources_installed.connect(self._subtitle_control.refresh_models)
         dialog.exec()
         if self._subtitle_control:
             self._subtitle_control.refresh_models()

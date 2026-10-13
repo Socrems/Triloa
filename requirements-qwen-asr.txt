@@ -1,0 +1,4 @@
+# Minimal runtime for the licensed Qwen3-ASR backend in triloa/_vendor.
+# PyTorch is already installed by the base Argos translation dependencies.
+transformers==4.57.6
+accelerate==1.12.0
