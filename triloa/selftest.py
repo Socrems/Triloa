@@ -31,7 +31,23 @@ def _portable_check() -> int:
         from argostranslate import translate
         from faster_whisper import WhisperModel
         from rapidocr import RapidOCR
+        from ._vendor.qwen3_asr import Qwen3ASRForConditionalGeneration, Qwen3ASRProcessor
         results['dependencies'] = 'ok'
+        from .qwen_asr import QwenASRSpeechSubtitleRunner, model_ready
+        if model_ready(MODELS / 'qwen3-asr'):
+            runner = QwenASRSpeechSubtitleRunner(model_path=MODELS / 'qwen3-asr')
+            loaded = runner._load_model()
+            prompt = loaded.processor.apply_chat_template(
+                [{'role':'system','content':''}, {'role':'user','content':[{'type':'audio','audio':''}]}],
+                add_generation_prompt=True, tokenize=False)
+            import numpy as np
+            inputs = loaded.processor(text=[prompt], audio=[np.zeros(16000, dtype=np.float32)],
+                                      sampling_rate=16000, return_tensors='pt', padding=True)
+            assert inputs['input_ids'].shape[1] > 0
+            del inputs, loaded
+            results['qwen_asr'] = 'ok: local model and audio processor loaded offline'
+        else:
+            results['qwen_asr'] = 'ok: runtime present; optional model deferred to setup'
         manager = ResourceManager()
         if manager.ready('basic'):
             from .translator import _argos

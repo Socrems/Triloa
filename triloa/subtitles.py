@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from threading import Thread
+from pathlib import Path
 
-from .paths import MODELS, configure_paths
+from .paths import MODELS, configure_paths, portable
 
 configure_paths()
 
@@ -13,9 +14,11 @@ from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QFormLayout, QSpinBox, QProgressBar, QLayout,
     QComboBox,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSizeGrip,
     QTextEdit,
@@ -28,6 +31,9 @@ from . import preferences
 from .window_state import WindowState
 from .subtitle_history import SubtitleHistoryOverlay
 from .nemotron import NemotronSpeechSubtitleRunner, NEMOTRON_MODEL_PATH, nemotron_available
+from .qwen_asr import (QwenASRSpeechSubtitleRunner, QWEN_ASR_MODEL_PATH,
+                       model_path as qwen_model_path, model_ready as qwen_model_ready,
+                       runtime_available as qwen_runtime_available, select_model_folder)
 from .translator import release_translator, begin_subtitle_session, end_subtitle_session, selected_backend
 from .ui_style import apply_app_style
 
@@ -361,9 +367,10 @@ class SubtitleControl(QWidget):
             "base": MODELS / "faster-whisper" / "base",
             "small": MODELS / "faster-whisper" / "small",
             "nemotron": NEMOTRON_MODEL_PATH,
+            "qwen-asr": qwen_model_path(),
         }
         self.model_available = {
-            name: nemotron_available() if name == "nemotron" else self._whisper_ready(name)
+            name: self._model_ready(name)
             for name, path in self.model_paths.items()
         }
         self.model_selector = QComboBox()
@@ -372,6 +379,7 @@ class SubtitleControl(QWidget):
             "base": "faster-whisper base · 较低延迟",
             "small": "faster-whisper small · 更高准确率，识别稍慢",
             "nemotron": "Nemotron 3.5 · 流式识别",
+            "qwen-asr": "Qwen3-ASR-0.6B · 日语 / 英语识别",
         }
         for name, path in self.model_paths.items():
             label = labels[name]
@@ -384,7 +392,7 @@ class SubtitleControl(QWidget):
             )
             item = self.model_selector.model().item(index)
             if item is not None:
-                item.setEnabled(self.model_available[name])
+                item.setEnabled(self.model_available[name] or name == "qwen-asr")
         preferred = preferences.get("speech.model")
         if not self.model_available.get(preferred):
             preferred = "nemotron" if self.model_available["nemotron"] else None
@@ -395,9 +403,21 @@ class SubtitleControl(QWidget):
             )
         self.model_selector.setCurrentIndex(list(self.model_paths).index(preferred))
         card_layout.addWidget(self.model_selector)
-        resources_button = QPushButton("安装字幕资源")
-        resources_button.clicked.connect(self.open_resources)
-        card_layout.addWidget(resources_button)
+        self.resources_button = QPushButton("安装字幕资源")
+        self.resources_button.clicked.connect(self.open_resources)
+        card_layout.addWidget(self.resources_button)
+        self.qwen_directory_row = QWidget()
+        qwen_actions = QHBoxLayout(self.qwen_directory_row)
+        qwen_actions.setContentsMargins(0, 0, 0, 0)
+        qwen_actions.addWidget(QLabel("模型目录"))
+        self.qwen_directory = QLineEdit(str(self.model_paths["qwen-asr"]))
+        self.qwen_directory.setReadOnly(True)
+        self.qwen_directory.setToolTip(self.qwen_directory.text())
+        qwen_actions.addWidget(self.qwen_directory, 1)
+        self.qwen_folder_button = QPushButton("选择文件夹")
+        self.qwen_folder_button.clicked.connect(self.choose_qwen_folder)
+        qwen_actions.addWidget(self.qwen_folder_button)
+        card_layout.addWidget(self.qwen_directory_row)
 
         self.model_detail = QLabel()
         self.model_detail.setObjectName("cardHint")
@@ -506,18 +526,51 @@ class SubtitleControl(QWidget):
         from .resources import whisper_ready
         return whisper_ready(name)
 
+    def _model_ready(self, name):
+        if name == "nemotron":
+            return nemotron_available()
+        if name == "qwen-asr":
+            return qwen_runtime_available() and qwen_model_ready(self.model_paths[name])
+        return self._whisper_ready(name)
+
+    def choose_qwen_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "选择完整的 Qwen3-ASR-0.6B 模型目录", str(self.model_paths["qwen-asr"].parent))
+        if folder:
+            self._select_qwen_folder(Path(folder))
+
+    def _select_qwen_folder(self, folder):
+        from .translator import model_busy
+        if self.runner is not None or model_busy():
+            self.status.setText("请先停止字幕并等待翻译结束，再更换模型目录。")
+            return
+        try:
+            folder = select_model_folder(folder)
+        except (ValueError, OSError) as exc:
+            self.status.setText(str(exc))
+            return
+        self.model_paths["qwen-asr"] = folder
+        self.refresh_models()
+        if not qwen_runtime_available():
+            self.status.setText("目录已保存；源码版请先运行 setup_qwen_asr.ps1 安装 Qwen3-ASR 推理依赖。")
+            return
+        self.status.setText("已选择 Qwen3-ASR 本地目录。模型直接从该位置读取，无需复制。")
+
     def refresh_models(self):
+        self.model_paths["qwen-asr"] = qwen_model_path()
+        self.qwen_directory.setText(str(self.model_paths["qwen-asr"]))
+        self.qwen_directory.setToolTip(self.qwen_directory.text())
         self.model_selector.blockSignals(True)
         try:
             for index, (name, path) in enumerate(self.model_paths.items()):
-                ready = nemotron_available() if name == "nemotron" else self._whisper_ready(name)
+                ready = self._model_ready(name)
                 self.model_available[name] = ready
                 label = self.model_selector.itemText(index).replace("（未安装）", "")
                 self.model_selector.setItemText(index, label if ready else label + "（未安装）")
+                self.model_selector.setItemData(index, str(path), Qt.ItemDataRole.ToolTipRole)
                 item = self.model_selector.model().item(index)
                 if item is not None:
-                    item.setEnabled(ready)
-            if not self.model_available.get(self.model_selector.currentData()):
+                    item.setEnabled(ready or name == "qwen-asr")
+            if self.model_selector.currentData() != "qwen-asr" and not self.model_available.get(self.model_selector.currentData()):
                 for index, name in enumerate(self.model_paths):
                     if self.model_available[name]:
                         self.model_selector.setCurrentIndex(index)
@@ -534,7 +587,11 @@ class SubtitleControl(QWidget):
             return
         from .resource_setup import ResourceSetupDialog
         dialog = ResourceSetupDialog(self)
-        dialog.subtitles.setChecked(True)
+        if self.model_selector.currentData() == "qwen-asr":
+            dialog.qwen_asr.setChecked(True)
+        else:
+            dialog.subtitles.setChecked(True)
+        dialog.resources_installed.connect(self.refresh_models)
         dialog.exec()
         self.refresh_models()
 
@@ -614,18 +671,25 @@ class SubtitleControl(QWidget):
 
     def _update_model_detail(self, _index: int = -1):
         name = self.model_selector.currentData()
+        self.qwen_directory_row.setVisible(name == "qwen-asr")
         path = self.model_paths[name]
         if self.model_available[name]:
             descriptions = {
                 "base": "base 更快，适合优先降低字幕延迟。",
                 "small": "small 通常识别更准，代价是处理时间更长。",
                 "nemotron": "流式识别可更快更新草稿；首次使用需手动放入本地运行库和模型。",
+                "qwen-asr": "Qwen3-ASR 负责识别，译文使用首页所选翻译模型。" + (
+                    "当前便携包使用 CPU；源码版可配置 CUDA 加速。" if portable()
+                    else "安装显卡依赖后自动使用 CUDA。"
+                ) + "实时模式按音频片段更新。",
             }
             self.model_detail.setText(
                 descriptions[name]
             )
         else:
-            if name == "nemotron":
+            if name == "qwen-asr":
+                self.model_detail.setText("请在资源管理下载 Qwen3-ASR，或在上方选择完整的本地模型目录。下载成功后会自动填写目录。")
+            elif name == "nemotron":
                 self.model_detail.setText(f"Nemotron 模型或运行库未安装，无法启动：{path}")
             else:
                 self.model_detail.setText(f"本地模型未安装，无法启动：{path}")
@@ -638,14 +702,12 @@ class SubtitleControl(QWidget):
             return
         name = self.model_selector.currentData()
         model_path = self.model_paths[name]
-        installed = nemotron_available() if name == "nemotron" else (
-            self._whisper_ready(name)
-        )
+        installed = self._model_ready(name)
         if not installed:
             self.model_available[name] = False
             item = self.model_selector.model().item(self.model_selector.currentIndex())
             if item is not None:
-                item.setEnabled(False)
+                item.setEnabled(name == "qwen-asr")
             self._update_model_detail()
             return
 
@@ -670,10 +732,13 @@ class SubtitleControl(QWidget):
         self.language_selector.setEnabled(False)
         self.device_selector.setEnabled(False)
         self.refresh_button.setEnabled(False)
+        self.resources_button.setEnabled(False)
+        self.qwen_folder_button.setEnabled(False)
+        self.qwen_directory.setEnabled(False)
         self.start_button.setEnabled(False)
-        model_label = "Nemotron 3.5" if name == "nemotron" else f"faster-whisper {name}"
+        model_label = self._model_label()
         self.status.setText(f"正在加载本地 {model_label} 模型…")
-        runner_type = NemotronSpeechSubtitleRunner if name == "nemotron" else SpeechSubtitleRunner
+        runner_type = {"nemotron": NemotronSpeechSubtitleRunner, "qwen-asr": QwenASRSpeechSubtitleRunner}.get(name, SpeechSubtitleRunner)
         runner_kwargs = {
             "mode": self.mode_selector.currentData(),
             "language": self.language_selector.currentData(),
@@ -736,7 +801,10 @@ class SubtitleControl(QWidget):
         )
 
     def _model_label(self) -> str:
-        return "Nemotron 3.5" if self._running_model == "nemotron" else f"faster-whisper {self._running_model}"
+        if self._running_model == "qwen-asr":
+            device = getattr(self.runner, "inference_device", "")
+            return "Qwen3-ASR-0.6B" + (" · CUDA" if device.startswith("cuda") else " · CPU" if device == "cpu" else "")
+        return {"nemotron": "Nemotron 3.5", "qwen-asr": "Qwen3-ASR-0.6B"}.get(self._running_model, f"faster-whisper {self._running_model}")
 
     def _show_error(self, message: str):
         if not self._display_enabled:
@@ -768,6 +836,9 @@ class SubtitleControl(QWidget):
         self.language_selector.setEnabled(True)
         self.device_selector.setEnabled(True)
         self.refresh_button.setEnabled(True)
+        self.resources_button.setEnabled(True)
+        self.qwen_folder_button.setEnabled(True)
+        self.qwen_directory.setEnabled(True)
         self.audio_level.setValue(0)
         self._update_model_detail()
         self._failed = False

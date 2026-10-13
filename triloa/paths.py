@@ -49,6 +49,9 @@ def configure_paths() -> None:
         "HUGGINGFACE_HUB_CACHE": CACHE / "huggingface" / "hub",
         "HF_XET_CACHE": CACHE / "huggingface" / "xet",
         "TORCH_HOME": CACHE / "torch",
+        "CUDA_CACHE_PATH": CACHE / "cuda",
+        "TORCHINDUCTOR_CACHE_DIR": CACHE / "torchinductor",
+        "TRITON_CACHE_DIR": CACHE / "triton",
     }
     for key, path in paths.items():
         os.environ[key] = str(path)

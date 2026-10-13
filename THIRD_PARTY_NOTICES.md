@@ -1,6 +1,6 @@
 # 第三方软件与模型
 
-## v0.1.2 Windows 便携包
+## v0.1.3 Windows 便携包
 
 便携包包含 Python、实际打包的 Python 依赖、Qt/PySide6 DLL 和 CPU llama.cpp b10964 运行库，不包含模型权重，也不包含 CUDA 或 NeMo 原生运行库。
 
@@ -10,11 +10,15 @@ Qt/PySide6 使用独立 DLL 动态链接，可以替换兼容构建；Triloa 不
 
 首次安装显式下载固定版本的 Argos en→zh 1.9、ja→en 1.1、MiniSBD 英语/日语断句、RapidOCR 3.9.2 对应 OCR 模型、SYSTRAN 转换的 Whisper base 和 faster-whisper 1.2.1 的 Silero VAD；下载后校验 SHA256。资源来源与许可分别参见下表，模型安装后不上传用户文字、截图或声音。MiniSBD 的 [软件与资源](https://github.com/LibreTranslate/MiniSBD) 按其上游声明使用；Silero VAD 来源见 [Silero 官方仓库](https://github.com/snakers4/silero-vad)，采用 MIT。
 
+v0.1.3 可显式下载 Qwen3-ASR-0.6B（修订 `5eb144179a02acc5e5ba31e748d22b0cf3e303b0`），配置与权重均校验 SHA256。模型采用 Apache-2.0，见 [官方模型卡](https://huggingface.co/Qwen/Qwen3-ASR-0.6B)。用户选择的外部目录只保存路径，不进入发行包。
+
+`triloa/_vendor/qwen3_asr` 包含从官方 `qwen-asr` 0.0.6 wheel 原样提取的 Transformers 模型、配置和处理器代码，保留各文件版权，以及同目录的 Apache-2.0 LICENSE 和来源 NOTICE。Triloa 使用自有的字幕适配器，不分发上游演示、强制对齐和 vLLM。二进制包在 `licenses/Qwen3-ASR` 保留相同告知。此部分第三方代码适用 Apache-2.0。
+
 v0.1.1 可添加用户自行下载的 GGUF 文本模型。Triloa 只记录其本地路径，源码包不包含这些权重。自选模型的许可、用途和分发条件应以其原始发布者的说明为准，项目 MIT 许可证只适用于 Triloa 自有代码。
 
 Triloa 自有源码采用根目录的 [MIT 许可证](LICENSE)。本文件列出主要依赖及官方许可来源，不将第三方组件重新授权为 MIT。
 
-源码包包含项目代码、文档、图标和便携构建时需保留的许可文本，不包含已安装的 Python 软件包、模型权重或原生运行库。安装时获取的第三方文件保留其原有版权与许可。
+源码安装包包含项目代码、文档、图标及随代码分发的第三方许可，不包含已安装的 Python 软件包、模型权重或原生运行库。构建工具及构建所用许可资料保留在 [development 分支](https://github.com/Socrems/Triloa/tree/development)，便携包的完整许可清单在其 `licenses` 目录。安装时获取的第三方文件保留其原有版权与许可。
 
 ## 直接 Python 依赖
 
@@ -28,6 +32,8 @@ Triloa 自有源码采用根目录的 [MIT 许可证](LICENSE)。本文件列出
 | ONNX Runtime | 1.30.0 | MIT | [ONNX Runtime](https://github.com/microsoft/onnxruntime) |
 | SoundCard | 0.4.6 | BSD-3-Clause | [SoundCard](https://github.com/bastibe/SoundCard) |
 | faster-whisper | 1.2.1 | MIT | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) |
+| Transformers | 4.57.6 | Apache-2.0 | [Transformers](https://github.com/huggingface/transformers) |
+| Accelerate | 1.12.0 | Apache-2.0 | [Accelerate](https://github.com/huggingface/accelerate) |
 
 安装还会解析传递依赖，例如 CTranslate2、Hugging Face Hub、NumPy 等；具体版本和许可应以实际下载的包为准。以上清单不是包含全部依赖的二进制发行包许可清单。PySide6 自带的 Qt Addons、Essentials 和其他库也应逐项核对；项目使用某个 Qt 模块，不代表整个软件包的所有文件都适用同一许可。
 
@@ -37,6 +43,7 @@ Triloa 自有源码采用根目录的 [MIT 许可证](LICENSE)。本文件列出
 |---|---|---|
 | HY-MT1.5-1.8B Q8_0 GGUF | 可选本地翻译模型；安装脚本从腾讯 ModelScope 镜像获取，SHA256 固定在下载器中 | [官方模型页](https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF)、[Tencent HY Community License](https://github.com/Tencent-Hunyuan/HY-MT/blob/main/License.txt) |
 | Qwen3-4B GGUF | 用户自行获取并选择本地 GGUF；不自动下载 | [官方 GGUF 模型页](https://huggingface.co/Qwen/Qwen3-4B-GGUF) 当前声明 Apache-2.0；核对所下载文件对应修订的许可 |
+| Qwen3-ASR-0.6B | 资源管理下载或选择完整本地 Safetensors 目录，使用 Transformers 在本机识别语音 | [官方模型页](https://huggingface.co/Qwen/Qwen3-ASR-0.6B)、[官方推理代码](https://github.com/QwenLM/Qwen3-ASR)，Apache-2.0 |
 | Argos 模型包 | 安装脚本读取 Argos 官方索引并获取 en→zh、ja→en 包 | [Argos 模型索引仓库](https://github.com/argosopentech/argospm-index)；模型包自身、训练数据和软件引擎许可应分别核对 |
 | RapidOCR / PP-OCR 模型 | OCR 组件使用本地已有或首次获取的模型资源 | [RapidOCR](https://github.com/RapidAI/RapidOCR)、[PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)；保留实际模型来源和随附许可 |
 | faster-whisper base / small | 本地 CTranslate2 格式的 Whisper 模型 | [base](https://huggingface.co/Systran/faster-whisper-base)、[small](https://huggingface.co/Systran/faster-whisper-small)、[Whisper](https://github.com/openai/whisper)；核对对应模型卡与转换来源 |
