@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Triloa 网页双语翻译",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "按网站启用双语翻译，在正文、标题和列表项下方显示本地模型生成的中文译文。",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "scripting"
   ],
   "host_permissions": [
-    "http://127.0.0.1:8765/*"
+    "http://*/*",
+    "https://*/*"
   ],
   "action": {
     "default_title": "Triloa 网页双语翻译",
@@ -23,7 +25,7 @@
         "http://*/*",
         "https://*/*"
       ],
-      "js": ["model_cache.js", "content.js"],
+      "js": ["model_cache.js", "floating_ball.js", "content.js"],
       "run_at": "document_idle"
     }
   ]

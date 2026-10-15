@@ -1,4 +1,4 @@
-﻿param([string]$Python = 'python')
+param([string]$Python = 'python')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $projectRoot

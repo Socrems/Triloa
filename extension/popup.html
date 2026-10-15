@@ -3,18 +3,29 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Triloa 网页视口翻译</title>
+  <title>Triloa 网页双语翻译</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <main>
-    <h1>Triloa 网页视口翻译</h1>
+    <h1>Triloa 网页双语翻译</h1>
     <p id="site" class="site">正在读取当前网站…</p>
-    <label class="setting" for="enabled">
-      <span class="setting-text">在此网站启用翻译</span>
-      <input id="enabled" type="checkbox" role="switch" disabled>
-      <span class="switch" aria-hidden="true"></span>
-    </label>
+    <section class="card" aria-label="网站翻译">
+      <label class="setting" for="enabled">
+        <span class="setting-text">在此网站启用翻译</span>
+        <input id="enabled" type="checkbox" role="switch" disabled>
+        <span class="switch" aria-hidden="true"></span>
+      </label>
+    </section>
+    <section class="card" aria-label="悬浮球">
+      <label class="setting" for="ball-enabled">
+        <span class="setting-text">显示网页悬浮球</span>
+        <input id="ball-enabled" type="checkbox" role="switch" disabled>
+        <span class="switch" aria-hidden="true"></span>
+      </label>
+      <p id="ball-status" class="hint">悬浮球默认关闭。</p>
+      <button id="restore-ball" type="button" disabled>恢复本站悬浮球</button>
+    </section>
     <p id="status" class="status" role="status">每个网站默认关闭，可在这里单独开启。</p>
   </main>
   <script src="popup.js"></script>

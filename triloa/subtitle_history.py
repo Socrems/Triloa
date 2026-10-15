@@ -6,6 +6,7 @@ from datetime import datetime
 from html import escape
 from . import preferences
 from .window_state import WindowState
+from .ui_style import apply_dark_overlay_style
 
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import QCursor, QScreen
@@ -25,6 +26,7 @@ class SubtitleHistoryOverlay(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        apply_dark_overlay_style(self)
         self.setMinimumSize(350, 190)
         self.resize(460, 340)
         self._locked = True
@@ -44,21 +46,6 @@ class SubtitleHistoryOverlay(QWidget):
                 border: 1px solid rgba(170, 185, 200, 70);
                 border-radius: 12px;
             }
-            QLabel { color: #ffffff; border: none; }
-            QPushButton {
-                color: white; background: rgba(255, 255, 255, 26);
-                border: 1px solid rgba(170, 185, 200, 80);
-                border-radius: 6px; padding: 2px;
-            }
-            QSpinBox {
-                color: white; background: #30363d;
-                border: 1px solid #64717d; border-radius: 5px;
-                min-height: 23px; padding: 1px 5px;
-            }
-            QTextEdit {
-                color: white; background: transparent;
-                border: none; font-size: 15px;
-            }
         """)
         outer.addWidget(panel)
         content = QVBoxLayout(panel)
@@ -66,11 +53,17 @@ class SubtitleHistoryOverlay(QWidget):
         content.setSpacing(8)
 
         header = QWidget(panel)
-        row = QHBoxLayout(header)
-        row.setContentsMargins(0, 0, 0, 0)
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(6)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(6)
         title = QLabel("翻译历史")
         title.setStyleSheet("font-size: 15px; font-weight: 600;")
-        row.addWidget(title)
+        title_row.addWidget(title)
+        title_row.addStretch()
+        row = QHBoxLayout()
+        row.setSpacing(6)
         row.addStretch()
         row.addWidget(QLabel("最近"))
         self.count_selector = QSpinBox()
@@ -88,11 +81,12 @@ class SubtitleHistoryOverlay(QWidget):
         row.addWidget(self.clear_button)
         self.lock_button = QPushButton("🔒")
         self.lock_button.setFixedSize(30, 28)
-        self.lock_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.lock_button.setToolTip("点击解锁位置和大小")
         self.lock_button.clicked.connect(self._toggle_locked)
         self.lock_button.hide()
-        row.addWidget(self.lock_button)
+        title_row.addWidget(self.lock_button)
+        header_layout.addLayout(title_row)
+        header_layout.addLayout(row)
         content.addWidget(header)
 
         self.text = QTextEdit()

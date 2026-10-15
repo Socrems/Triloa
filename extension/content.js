@@ -17,29 +17,134 @@
     "with", "would", "you", "your"
   ]);
 
-  if (!document.documentElement || globalThis.__triloaViewportTranslationLoaded) return;
+  if (!document.documentElement || (window.top && window.top !== window)) return;
+  // The DOM event also reaches controllers from a previous extension world.
+  // v0.1.3 did not expose disposal, so its observers require a page refresh.
+  const DISPOSE_EVENT = "triloa:dispose:v014";
+  const hadLegacyFlag = globalThis.__triloaViewportTranslationLoaded && !globalThis.__triloaController;
+  globalThis.__triloaController?.dispose();
+  document.dispatchEvent(new window.Event(DISPOSE_EVENT));
+  const upgradeRequired = Boolean(hadLegacyFlag || document.querySelector('[data-triloa-owned="translation"], [data-triloa-owned="status"]'));
   globalThis.__triloaViewportTranslationLoaded = true;
   const ENABLED_KEY = `triloa:enabled:${location.origin}`;
+  const BALL_KEY = "triloa:ball:enabled";
+  const HIDDEN_KEY = `triloa:ball:hidden:${location.origin}`;
+  const POSITION_KEY = "triloa:ball:position";
+  const keys = [ENABLED_KEY, BALL_KEY, HIDDEN_KEY, POSITION_KEY];
+  const values = { [ENABLED_KEY]: false, [BALL_KEY]: false, [HIDDEN_KEY]: false,
+    [POSITION_KEY]: { side: "right", yRatio: .5 } };
+  const revisions = new Map(keys.map(key => [key, 0]));
+  const pending = new Set();
+  let active = true;
   let controller = null;
-  let settingsRevision = 0;
+  let ball = null;
+  let preferenceNotice = null;
+  let preferenceError = "";
+
+  function normalizePreference(key, value) {
+    if (key !== POSITION_KEY) return value === true;
+    return { side: value?.side === "left" ? "left" : "right",
+      yRatio: typeof value?.yRatio === "number" && Number.isFinite(value.yRatio) ? Math.max(0, Math.min(1, value.yRatio)) : .5 };
+  }
 
   function setEnabled(enabled) {
-    if (enabled && !controller) controller = createInlineTranslation();
+    if (enabled && !controller && !upgradeRequired) controller = createInlineTranslation();
     if (!enabled && controller) {
       controller.stop();
       controller = null;
     }
   }
 
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local" || !Object.hasOwn(changes, ENABLED_KEY)) return;
-    settingsRevision++;
-    setEnabled(changes[ENABLED_KEY].newValue === true);
+  function renderPreferences() {
+    if (!active) return;
+    setEnabled(values[ENABLED_KEY]);
+    const visible = values[BALL_KEY] && !values[HIDDEN_KEY];
+    if (visible && !ball) {
+      ball = globalThis.TriloaFloatingBall({
+        onToggle: () => savePreference(ENABLED_KEY, !values[ENABLED_KEY]),
+        onHide: () => savePreference(HIDDEN_KEY, true),
+        onGlobalChange: value => savePreference(BALL_KEY, value),
+        onReset: () => savePreference(POSITION_KEY, { side: "right", yRatio: .5 }),
+        onPosition: value => savePreference(POSITION_KEY, value)
+      });
+    }
+    if (!visible && ball) { ball.dispose(); ball = null; }
+    ball?.update({ enabled: values[ENABLED_KEY], ballEnabled: values[BALL_KEY], position: values[POSITION_KEY],
+      pending: { enabled: pending.has(ENABLED_KEY), ball: pending.has(BALL_KEY), hidden: pending.has(HIDDEN_KEY), position: pending.has(POSITION_KEY) },
+      upgrade: upgradeRequired });
+    const message = preferenceError || (upgradeRequired ? "Triloa 扩展已更新。此页仍有旧版脚本，请刷新网页完成升级。" : "");
+    if (message && !preferenceNotice) {
+      preferenceNotice = document.createElement("div");
+      preferenceNotice.setAttribute("data-triloa-owned", "preference-notice");
+      preferenceNotice.style.cssText = "position:fixed;bottom:16px;right:16px;z-index:2147483647;max-width:min(360px,90vw);";
+      const root = preferenceNotice.attachShadow({ mode: "open" });
+      const css = document.createElement("style");
+      css.textContent = "div{box-sizing:border-box;padding:12px 16px;background:#FFFFFF;color:#223047;border:1px solid #D9E0E9;border-radius:12px;font:14px/1.5 system-ui;box-shadow:0 4px 20px #22304720}";
+      const text = document.createElement("div");
+      text.setAttribute("role", "status");
+      root.append(css, text);
+      document.documentElement.append(preferenceNotice);
+    }
+    if (message) preferenceNotice.shadowRoot.querySelector("div").textContent = message;
+    else { preferenceNotice?.remove(); preferenceNotice = null; }
+  }
+
+  async function savePreference(key, value) {
+    if (!active || pending.has(key)) return;
+    const before = values[key];
+    const revision = revisions.get(key) + 1;
+    revisions.set(key, revision);
+    pending.add(key);
+    values[key] = normalizePreference(key, value);
+    preferenceError = "";
+    renderPreferences();
+    try {
+      await chrome.storage.local.set({ [key]: values[key] });
+    } catch (error) {
+      if (!active) return;
+      if (revisions.get(key) === revision) values[key] = before;
+      preferenceError = `保存设置失败，请重试：${error instanceof Error ? error.message : String(error)}`;
+    } finally {
+      if (active) { pending.delete(key); renderPreferences(); }
+    }
+  }
+  function onStorageChanged(changes, area) {
+    if (!active || area !== "local") return;
+    for (const key of keys) {
+      if (!Object.hasOwn(changes, key)) continue;
+      revisions.set(key, revisions.get(key) + 1);
+      values[key] = normalizePreference(key, changes[key].newValue);
+    }
+    renderPreferences();
+  }
+  function dispose() {
+    if (!active) return;
+    active = false;
+    chrome.storage.onChanged.removeListener(onStorageChanged);
+    document.removeEventListener(DISPOSE_EVENT, dispose);
+    controller?.stop();
+    controller = null;
+    ball?.dispose();
+    ball = null;
+    preferenceNotice?.remove();
+    preferenceNotice = null;
+    if (globalThis.__triloaController?.dispose === dispose) delete globalThis.__triloaController;
+  }
+  globalThis.__triloaController = { dispose };
+  document.addEventListener(DISPOSE_EVENT, dispose);
+  chrome.storage.onChanged.addListener(onStorageChanged);
+  const initialRevisions = new Map(revisions);
+  void chrome.storage.local.get(keys).then(settings => {
+    if (!active) return;
+    for (const key of keys) {
+      if (initialRevisions.get(key) === revisions.get(key)) values[key] = normalizePreference(key, settings[key]);
+    }
+    renderPreferences();
+  }).catch(error => {
+    if (!active) return;
+    preferenceError = `无法读取设置，请刷新网页重试：${error instanceof Error ? error.message : String(error)}`;
+    renderPreferences();
   });
-  const initialRevision = settingsRevision;
-  void chrome.storage.local.get(ENABLED_KEY).then((settings) => {
-    if (settingsRevision === initialRevision) setEnabled(settings[ENABLED_KEY] === true);
-  }).catch((error) => console.warn("Triloa 无法读取网站开关：", error));
 
   function createInlineTranslation() {
     const modelCache = new globalThis.TriloaModelCache(CACHE_LIMIT);
@@ -60,7 +165,7 @@
     notice.style.cssText = "position:fixed;bottom:16px;right:16px;z-index:2147483647;max-width:min(360px,90vw);";
     const shadow = notice.attachShadow({ mode: "open" });
     const style = document.createElement("style");
-    style.textContent = "div{background:#fff;color:#722f25;border:1px solid #ead0c8;border-radius:10px;padding:12px;font:14px/1.5 system-ui;box-shadow:0 4px 20px #0002}button{margin-top:8px;cursor:pointer} [hidden]{display:none}";
+    style.textContent = "div{background:#FFFFFF;color:#223047;border:1px solid #D9E0E9;border-radius:12px;padding:12px 16px;font:14px/1.5 system-ui;box-shadow:0 4px 20px #22304720}button{margin-top:8px;padding:6px 12px;border:1px solid #D9E0E9;border-radius:8px;background:#F5F7FA;color:#356AC3;cursor:pointer}button:focus-visible{outline:2px solid #356AC3;outline-offset:2px}[hidden]{display:none}";
     const box = document.createElement("div");
     box.setAttribute("role", "status");
     const message = document.createElement("span");
