@@ -127,8 +127,8 @@ async function main() {
     const scope = {
       URL, Error, TypeError, AbortController, setTimeout, clearTimeout,
       chrome: {
-        runtime: { id: "extension-id", onMessage: { addListener: (fn) => { listener = fn; } } },
-        storage: { local: { get: async (key) => ({ [key]: true }) } }
+        runtime: { id: "extension-id", onMessage: { addListener: (fn) => { listener = fn; } }, onInstalled: { addListener() {} } },
+        storage: { local: { get: async (key) => ({ [key]: true }) }, onChanged: { addListener() {} } }
       },
       fetch: async (url) => {
         requested.push(url);

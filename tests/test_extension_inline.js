@@ -26,7 +26,7 @@ function page(html, enabled = true) {
   const chrome = {
     storage: {
       local: { get: async () => ({ [key]: enabled }) },
-      onChanged: { addListener: callback => { change = callback; } }
+      onChanged: { addListener: callback => { change = callback; }, removeListener: () => {} }
     },
     runtime: {
       sendMessage: async message => {
@@ -40,7 +40,7 @@ function page(html, enabled = true) {
     }
   };
   const context = vm.createContext({ window, document, MutationObserver: window.MutationObserver, chrome, location: { origin: "https://example.com" }, console });
-  for (const name of ["model_cache.js", "content.js"]) vm.runInContext(fs.readFileSync(path.join(__dirname, "../extension", name), "utf8"), context);
+  for (const name of ["model_cache.js", "floating_ball.js", "content.js"]) vm.runInContext(fs.readFileSync(path.join(__dirname, "../extension", name), "utf8"), context);
   return {
     document, requests, state,
     switch(value) { change({ [key]: { newValue: value } }, "local"); },

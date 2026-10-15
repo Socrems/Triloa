@@ -1,6 +1,6 @@
 """Triloa: local translation tools for Windows."""
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 # The optional CUDA wheel lives beside the source checkout, without replacing
 # the CPU environment used for portable builds. Activate it only after setup

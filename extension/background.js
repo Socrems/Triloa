@@ -4,6 +4,33 @@ const MAX_BATCH_SIZE = 32;
 const MAX_TEXT_LENGTH = 8000;
 const REQUEST_TIMEOUT_MS = 90000;
 
+// Existing top-level web tabs do not receive newly installed content scripts.
+// Each tab is independent: a store, PDF or restricted page must not abort others.
+async function injectOpenPages() {
+  let tabs;
+  try {
+    tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
+  } catch (error) {
+    console.warn("Triloa 无法读取已打开的网页：", error);
+    return;
+  }
+  for (const tab of tabs) {
+    try {
+      if (!Number.isInteger(tab.id) || !["http:", "https:"].includes(new URL(tab.url).protocol)) continue;
+      for (const file of ["model_cache.js", "floating_ball.js", "content.js"]) {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id, frameIds: [0] }, files: [file] });
+      }
+    } catch (error) {
+      console.warn("Triloa 无法在此标签页加载；可刷新普通网页重试：", tab.id, error);
+    }
+  }
+}
+chrome.runtime.onInstalled.addListener(() => { void injectOpenPages(); });
+chrome.storage.onChanged.addListener((changes, area) => {
+  const change = changes["triloa:ball:enabled"];
+  if (area === "local" && change?.newValue === true && change.oldValue !== true) void injectOpenPages();
+});
+
 function serviceError(payload, rawText, status) {
   const detail = payload && typeof payload === "object"
     ? (payload.detail ?? payload.error ?? payload.message)

@@ -61,59 +61,70 @@ class MonitorTranslationOverlay(QWidget):
         panel.setObjectName("monitorPanel")
         panel.setStyleSheet("""
             QFrame#monitorPanel {
-                background-color: rgba(12, 14, 17, 230);
-                border: 1px solid rgba(255, 255, 255, 55);
-                border-radius: 13px;
+                background-color: rgba(245, 247, 250, 248);
+                border: 1px solid #D9E0E9;
+                border-radius: 12px;
             }
             QLabel#monitorTitle {
-                color: white;
-                font-size: 14px;
+                color: #223047;
+                font-size: 15px;
                 font-weight: 600;
             }
             QLabel#monitorStatus {
-                color: #bbc4ce;
+                color: #637187;
                 font-size: 12px;
             }
             QPushButton#monitorAction {
-                background-color: rgba(255, 255, 255, 28);
-                border: 1px solid rgba(255, 255, 255, 55);
-                border-radius: 6px;
-                color: white;
-                min-height: 20px;
-                padding: 3px 8px;
+                background-color: #FFFFFF;
+                border: 1px solid #D9E0E9;
+                border-radius: 8px;
+                color: #223047;
+                min-height: 28px;
+                padding: 0 8px;
             }
             QPushButton#monitorAction:hover {
-                background-color: rgba(255, 255, 255, 55);
+                background-color: #EDF2F7;
+                border-color: #A7B9D2;
             }
-            QTextEdit#monitorTranslation {
-                background: transparent;
-                border: none;
-                color: white;
+            QPushButton#monitorAction:focus { border-color: #4F83CD; }
+            QPushButton#monitorAction:pressed { background: #EAF1FC; }
+            QTextEdit#monitorTranslation, QTextEdit#monitorTranslation:read-only {
+                background: #FFFFFF;
+                border: 1px solid #D9E0E9;
+                border-radius: 8px;
+                color: #223047;
                 font-size: 16px;
-                padding: 0;
-                selection-background-color: #397da7;
+                padding: 9px;
+                selection-background-color: #DCE9FC;
+                selection-color: #223047;
             }
+            QTextEdit#monitorTranslation:focus { border-color: #4F83CD; }
         """)
         outer.addWidget(panel)
 
         content = QVBoxLayout(panel)
         content.setContentsMargins(15, 13, 15, 15)
-        content.setSpacing(10)
+        content.setSpacing(8)
         self.header_widget = QWidget(panel)
-        header = QHBoxLayout(self.header_widget)
+        header_layout = QVBoxLayout(self.header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(6)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(6)
+        header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(6)
         title = QLabel("中文实时翻译")
         title.setObjectName("monitorTitle")
-        header.addWidget(title)
-        header.addStretch()
+        title_row.addWidget(title)
+        title_row.addStretch()
         self.lock_button = QPushButton("🔒")
         self.lock_button.setObjectName("monitorAction")
         self.lock_button.setFixedSize(32, 28)
-        self.lock_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.lock_button.setToolTip("点击解锁位置和大小")
         self.lock_button.clicked.connect(self._toggle_locked)
         self.lock_button.hide()
-        header.addWidget(self.lock_button)
+        title_row.addWidget(self.lock_button)
         restore = QPushButton("恢复主窗口")
         restore.setObjectName("monitorAction")
         restore.setToolTip("恢复 Triloa 主窗口，持续监视保持运行")
@@ -124,6 +135,8 @@ class MonitorTranslationOverlay(QWidget):
         stop.setToolTip("停止持续监视并恢复主窗口")
         stop.clicked.connect(on_stop)
         header.addWidget(stop)
+        header_layout.addLayout(title_row)
+        header_layout.addLayout(header)
         content.addWidget(self.header_widget)
 
         self.status = QLabel("等待识别所选区域…")
@@ -132,6 +145,7 @@ class MonitorTranslationOverlay(QWidget):
         content.addWidget(self.status)
         if on_retry:
             retry = QPushButton("重新识别")
+            retry.setObjectName("monitorAction")
             retry.clicked.connect(on_retry)
             content.addWidget(retry)
         self.translation = QTextEdit()

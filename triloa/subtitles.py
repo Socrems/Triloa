@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizeGrip,
     QTextEdit,
-    QVBoxLayout,
+    QVBoxLayout, QSizePolicy,
     QWidget,
 )
 
@@ -35,7 +35,7 @@ from .qwen_asr import (QwenASRSpeechSubtitleRunner, QWEN_ASR_MODEL_PATH,
                        model_path as qwen_model_path, model_ready as qwen_model_ready,
                        runtime_available as qwen_runtime_available, select_model_folder)
 from .translator import release_translator, begin_subtitle_session, end_subtitle_session, selected_backend
-from .ui_style import apply_app_style
+from .ui_style import apply_app_style, apply_dark_overlay_style, ElidingComboBox
 
 
 class SubtitleBridge(QObject):
@@ -92,6 +92,7 @@ class SubtitleOverlay(QWidget):
             | Qt.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
+        apply_dark_overlay_style(self)
         self.setMinimumSize(320, 150)
         self.resize(880, 250)
         self._locked = True
@@ -117,19 +118,19 @@ class SubtitleOverlay(QWidget):
         toolbar.setContentsMargins(0, 0, 0, 0)
         toolbar.addStretch()
         self._lock_host = QWidget(self)
-        self._lock_host.setFixedSize(34, 30)
+        self._lock_host.setFixedSize(34, 32)
         lock_layout = QHBoxLayout(self._lock_host)
         lock_layout.setContentsMargins(0, 0, 0, 0)
         lock_layout.setSpacing(0)
         self.lock_button = QPushButton("🔒", self._lock_host)
-        self.lock_button.setFixedSize(30, 26)
-        self.lock_button.setFocusPolicy(Qt.NoFocus)
+        self.lock_button.setFixedSize(30, 28)
         self.lock_button.setToolTip("点击解锁位置和大小")
         self.lock_button.setStyleSheet(
             "QPushButton { color: white; background: rgba(27, 30, 35, 225); "
             "border: 1px solid rgba(170, 185, 200, 100); border-radius: 7px; "
-            "font-size: 16px; padding: 0; } "
-            "QPushButton:hover { background: rgba(65, 75, 86, 240); }"
+            "font-size: 16px; min-height: 28px; padding: 0; } "
+            "QPushButton:hover { background: rgba(65, 75, 86, 240); } "
+            "QPushButton:focus { border-color: #82AFE8; }"
         )
         self.lock_button.clicked.connect(self._toggle_locked)
         self.lock_button.hide()
@@ -187,7 +188,7 @@ class SubtitleOverlay(QWidget):
     def apply_appearance(self):
         for editor, key, default, color in ((self.original, 'original_size', 18, '#e0e7ee'), (self.chinese, 'translated_size', 22, '#ffffff')):
             size = preferences.number('captions.' + key, default, 12, 48)
-            editor.setStyleSheet(f"QTextEdit {{color: {color}; background: transparent; border: none; padding: 9px 15px; font-size: {size}px;}}")
+            editor.setStyleSheet(f"QTextEdit, QTextEdit:read-only {{color: {color}; background: transparent; border: none; padding: 9px 15px; font-size: {size}px; selection-background-color: #397DA7; selection-color: #FFFFFF;}}")
         opacity = preferences.number('captions.opacity', 88, 30, 100)
         self.panel.setStyleSheet(f"QFrame#bilingualSubtitlePanel {{background: rgba(27,30,35,{round(opacity * 2.55)}); border: 1px solid rgba(170,185,200,70); border-radius: 12px;}}")
         ratio = int(preferences.number('captions.ratio', 50, 25, 75))
@@ -335,8 +336,8 @@ class SubtitleControl(QWidget):
         self.setObjectName("subtitleRoot")
         layout = QVBoxLayout(self)
         layout.setSizeConstraint(QLayout.SetMinimumSize)
-        layout.setContentsMargins(22, 20, 22, 20)
-        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
 
         eyebrow = QLabel("TRILOA  /  LIVE CAPTIONS")
         eyebrow.setObjectName("eyebrow")
@@ -356,12 +357,16 @@ class SubtitleControl(QWidget):
         card = QFrame()
         card.setObjectName("card")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(17, 15, 17, 17)
-        card_layout.setSpacing(10)
+        card_layout.setContentsMargins(20, 16, 20, 16)
+        card_layout.setSpacing(8)
         section = QLabel("识别设置")
         section.setObjectName("sectionTitle")
         card_layout.addWidget(section)
-        card_layout.addWidget(QLabel("本地语音模型"))
+        form = QFormLayout()
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(8)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         self.model_paths = {
             "base": MODELS / "faster-whisper" / "base",
@@ -373,8 +378,11 @@ class SubtitleControl(QWidget):
             name: self._model_ready(name)
             for name, path in self.model_paths.items()
         }
-        self.model_selector = QComboBox()
+        self.model_selector = ElidingComboBox()
         self.model_selector.setObjectName("modelSelector")
+        self.model_selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.model_selector.setMinimumContentsLength(15)
+        self.model_selector.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         labels = {
             "base": "faster-whisper base · 较低延迟",
             "small": "faster-whisper small · 更高准确率，识别稍慢",
@@ -402,28 +410,37 @@ class SubtitleControl(QWidget):
                 "base",
             )
         self.model_selector.setCurrentIndex(list(self.model_paths).index(preferred))
-        card_layout.addWidget(self.model_selector)
-        self.resources_button = QPushButton("安装字幕资源")
+        model_row = QHBoxLayout()
+        model_row.setSpacing(8)
+        model_row.addWidget(self.model_selector, 1)
+        self.resources_button = QPushButton("资源管理")
         self.resources_button.clicked.connect(self.open_resources)
-        card_layout.addWidget(self.resources_button)
+        model_row.addWidget(self.resources_button)
+        form.addRow("识别模型", model_row)
         self.qwen_directory_row = QWidget()
         qwen_actions = QHBoxLayout(self.qwen_directory_row)
         qwen_actions.setContentsMargins(0, 0, 0, 0)
-        qwen_actions.addWidget(QLabel("模型目录"))
+        qwen_actions.setSpacing(8)
+        directory_label = QLabel("模型目录")
+        directory_label.setFixedWidth(directory_label.fontMetrics().horizontalAdvance("识别模型") + 8)
+        qwen_actions.addWidget(directory_label)
         self.qwen_directory = QLineEdit(str(self.model_paths["qwen-asr"]))
         self.qwen_directory.setReadOnly(True)
+        self.qwen_directory.setMinimumWidth(0)
+        self.qwen_directory.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.qwen_directory.setToolTip(self.qwen_directory.text())
         qwen_actions.addWidget(self.qwen_directory, 1)
         self.qwen_folder_button = QPushButton("选择文件夹")
         self.qwen_folder_button.clicked.connect(self.choose_qwen_folder)
         qwen_actions.addWidget(self.qwen_folder_button)
-        card_layout.addWidget(self.qwen_directory_row)
+        form.addRow(self.qwen_directory_row)
 
         self.model_detail = QLabel()
         self.model_detail.setObjectName("cardHint")
         self.model_detail.setWordWrap(True)
-        card_layout.addWidget(self.model_detail)
-        card_layout.addWidget(QLabel("字幕模式"))
+        self.model_detail.setMinimumWidth(0)
+        self.model_detail.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        form.addRow(self.model_detail)
         self.mode_selector = QComboBox()
         self.mode_selector.addItem("整句模式 · 句末显示", "sentence")
         self.mode_selector.addItem("实时模式 · 持续更新，句末定稿", "live")
@@ -431,15 +448,17 @@ class SubtitleControl(QWidget):
         self.mode_selector.setToolTip(
             "实时模式会在说话过程中显示可修正的临时字幕，句末显示最终结果。"
         )
-        card_layout.addWidget(self.mode_selector)
-        card_layout.addWidget(QLabel("识别语言"))
+        form.addRow("字幕模式", self.mode_selector)
         self.language_selector = QComboBox()
         self.language_selector.addItem("自动检测", "auto")
         self.language_selector.addItem("英语", "en")
         self.language_selector.addItem("日语", "ja")
-        card_layout.addWidget(self.language_selector)
+        form.addRow("识别语言", self.language_selector)
         device_row = QHBoxLayout()
-        self.device_selector = QComboBox()
+        device_row.setSpacing(8)
+        self.device_selector = ElidingComboBox()
+        self.device_selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.device_selector.setMinimumContentsLength(15)
         self.device_selector.addItem("系统默认播放设备", None)
         saved_device = preferences.get('speech.device')
         if saved_device:
@@ -449,19 +468,19 @@ class SubtitleControl(QWidget):
         self.refresh_button = QPushButton("刷新设备")
         self.refresh_button.clicked.connect(self.refresh_devices)
         device_row.addWidget(self.refresh_button)
-        card_layout.addWidget(QLabel("声音来源"))
-        card_layout.addLayout(device_row)
+        form.addRow("声音来源", device_row)
         self.audio_level = QProgressBar()
         self.audio_level.setRange(0, 100)
         self.audio_level.setValue(0)
         self.audio_level.setFixedHeight(8)
         self.audio_level.setTextVisible(False)
         self.audio_level.setToolTip("系统播放音量；无声音时检查所选播放设备")
-        card_layout.addWidget(self.audio_level)
+        form.addRow("播放音量", self.audio_level)
+        card_layout.addLayout(form)
         layout.addWidget(card)
 
         actions = QHBoxLayout()
-        actions.setSpacing(10)
+        actions.setSpacing(8)
         self.start_button = QPushButton("开始字幕")
         self.start_button.setObjectName("primaryButton")
         self.start_button.clicked.connect(self._start)
@@ -473,6 +492,7 @@ class SubtitleControl(QWidget):
         actions.addWidget(self.stop_button, 1)
         layout.addLayout(actions)
         options = QHBoxLayout()
+        options.setSpacing(8)
         for label, callback in (("字幕外观", self.appearance_dialog), ("显示 / 隐藏字幕", self.toggle_overlay), ("显示 / 隐藏历史", self.toggle_history)):
             button = QPushButton(label)
             button.clicked.connect(callback)
@@ -646,6 +666,9 @@ class SubtitleControl(QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle('字幕外观')
         form = QFormLayout(dialog)
+        form.setContentsMargins(20, 20, 20, 20)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(8)
         fields = []
         for key, label, default, low, high, suffix in (
             ('original_size', '原文字号', 18, 12, 48, ' px'),
@@ -661,6 +684,9 @@ class SubtitleControl(QWidget):
             form.addRow(label, field)
             fields.append((key, field))
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Save).setText("保存")
+        buttons.button(QDialogButtonBox.Save).setObjectName("primaryButton")
+        buttons.button(QDialogButtonBox.Cancel).setText("取消")
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
@@ -671,14 +697,15 @@ class SubtitleControl(QWidget):
 
     def _update_model_detail(self, _index: int = -1):
         name = self.model_selector.currentData()
+        self.model_selector.setToolTip(self.model_selector.currentText() + "\n" + str(self.model_paths[name]))
         self.qwen_directory_row.setVisible(name == "qwen-asr")
         path = self.model_paths[name]
         if self.model_available[name]:
             descriptions = {
                 "base": "base 更快，适合优先降低字幕延迟。",
                 "small": "small 通常识别更准，代价是处理时间更长。",
-                "nemotron": "流式识别可更快更新草稿；首次使用需手动放入本地运行库和模型。",
-                "qwen-asr": "Qwen3-ASR 负责识别，译文使用首页所选翻译模型。" + (
+                "nemotron": "流式识别，持续更新临时字幕，句末生成定稿。",
+                "qwen-asr": "按音频片段识别，译文使用顶部所选翻译模型。" + (
                     "当前便携包使用 CPU；源码版可配置 CUDA 加速。" if portable()
                     else "安装显卡依赖后自动使用 CUDA。"
                 ) + "实时模式按音频片段更新。",
@@ -686,6 +713,7 @@ class SubtitleControl(QWidget):
             self.model_detail.setText(
                 descriptions[name]
             )
+            self.model_detail.setToolTip(descriptions[name] + "\n" + str(path))
         else:
             if name == "qwen-asr":
                 self.model_detail.setText("请在资源管理下载 Qwen3-ASR，或在上方选择完整的本地模型目录。下载成功后会自动填写目录。")
@@ -693,6 +721,10 @@ class SubtitleControl(QWidget):
                 self.model_detail.setText(f"Nemotron 模型或运行库未安装，无法启动：{path}")
             else:
                 self.model_detail.setText(f"本地模型未安装，无法启动：{path}")
+            self.model_detail.setToolTip(self.model_detail.text())
+        self.model_detail.setProperty("error", not self.model_available[name])
+        self.model_detail.style().unpolish(self.model_detail)
+        self.model_detail.style().polish(self.model_detail)
         self.start_button.setEnabled(
             self.model_available[name] and self.runner is None
         )

@@ -5,11 +5,12 @@ from pathlib import Path
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QPushButton, QFileDialog,
-    QMessageBox, QLabel, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QMenu,
+    QMessageBox, QLabel, QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QMenu, QSizePolicy,
 )
 
 from . import translator
 from .translation_models import PROFILES, EXECUTIONS, registered_models, same_path, guess_profile
+from .ui_style import ElidingComboBox
 
 
 class LocalModelDialog(QDialog):
@@ -19,16 +20,25 @@ class LocalModelDialog(QDialog):
         self.setWindowTitle('模型设置' if model is not None else '添加本地翻译模型')
         self.setMinimumWidth(540)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
         hint = QLabel('选择已下载的 GGUF 翻译或对话模型。文件保留在原位置，启动后按需加载。')
+        hint.setObjectName('cardHint')
         hint.setWordWrap(True)
         layout.addWidget(hint)
         form = QFormLayout()
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(8)
         self.name = QLineEdit(model.name if model is not None else Path(path).stem)
         self.name.setMaxLength(80)
         form.addRow('显示名称', self.name)
         self.path = QLineEdit(str(path))
         self.path.setReadOnly(True)
+        self.path.setToolTip(str(path))
+        self.path.setMinimumWidth(0)
+        self.path.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         file_row = QHBoxLayout()
+        file_row.setSpacing(8)
         file_row.addWidget(self.path, 1)
         browse = QPushButton('选择文件')
         browse.clicked.connect(self.browse_path)
@@ -48,9 +58,11 @@ class LocalModelDialog(QDialog):
         detail = QLabel('通用模型使用文件自带的对话模板；Qwen 配置会关闭思考。'
                         '仅 CPU 通常更慢。兼容性、中文翻译质量和内存需求取决于所选模型。')
         detail.setWordWrap(True)
+        detail.setObjectName('cardHint')
         layout.addWidget(detail)
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Save).setText('保存并使用')
+        buttons.button(QDialogButtonBox.Save).setObjectName('primaryButton')
         buttons.button(QDialogButtonBox.Cancel).setText('取消')
         buttons.accepted.connect(self.save_model)
         buttons.rejected.connect(self.reject)
@@ -64,6 +76,7 @@ class LocalModelDialog(QDialog):
             if self.name.text() == previous.stem:
                 self.name.setText(Path(path).stem)
             self.path.setText(path)
+            self.path.setToolTip(path)
             self.profile.setCurrentIndex(self.profile.findData(guess_profile(Path(path))))
 
     def save_model(self):
@@ -81,15 +94,16 @@ class TranslationModelPicker(QWidget):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
+        layout.setSpacing(6)
         row = QHBoxLayout()
         row.setSpacing(8)
         row.addWidget(QLabel('翻译模型'))
-        self.choice = QComboBox()
+        self.choice = ElidingComboBox()
         self.choice.setObjectName('headerModel')
         self.choice.setMinimumWidth(160)
         self.choice.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.choice.setMinimumContentsLength(15)
+        self.choice.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.choice.currentIndexChanged.connect(self.choose)
         row.addWidget(self.choice, 1)
         self.manage = QPushButton('管理模型')
@@ -105,6 +119,8 @@ class TranslationModelPicker(QWidget):
         self.detail = QLabel()
         self.detail.setObjectName('cardHint')
         self.detail.setWordWrap(True)
+        self.detail.setMinimumWidth(0)
+        self.detail.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         layout.addWidget(self.detail)
         self._entries = None
         self.timer = QTimer(self)
@@ -129,13 +145,13 @@ class TranslationModelPicker(QWidget):
             self.choice.clear()
             for identifier, label, path in entries:
                 self.choice.addItem(label, identifier)
-                if path:
-                    self.choice.setItemData(self.choice.count() - 1, path, Qt.ToolTipRole)
+                self.choice.setItemData(self.choice.count() - 1, label + ('\n' + path if path else ''), Qt.ToolTipRole)
             self._entries = entries
         backend = translator.selected_backend()
         selected = translator.selected_local_model() if backend == 'custom' else None
         identifier = 'custom:' + selected.id if selected is not None else 'auto' if backend == 'hy' else backend
         self.choice.setCurrentIndex(self.choice.findData(identifier))
+        self.choice.setToolTip(self.choice.currentData(Qt.ToolTipRole) or self.choice.currentText())
         self.choice.blockSignals(False)
         locked = translator.model_busy()
         controlled = bool(os.getenv('TRILOA_TRANSLATOR'))
